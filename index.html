@@ -1,275 +1,519 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>قارئ النصوص الذكي (OCR)</title>
-    
-    <!-- استدعاء مكتبة Tesseract.js لتشغيل الـ OCR في المتصفح -->
-    <script src="https://jsdelivr.net"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <title>Lens Style OCR | عربي وإنجليزي</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Google Sans', 'Segoe UI', Tahoma, sans-serif;
+      background: #000;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      color: white;
+    }
+    .scanner-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #000;
+    }
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
 
-    <style>
-        /* --- أسلوب التصميم (CSS) --- */
-        :root {
-            --primary-color: #1a73e8; /* لون جوجل لينز الأزرق */
-            --bg-color: #f8f9fa;
-            --card-bg: #ffffff;
-            --text-color: #3c4043;
-        }
+    /* شريط علوي شفاف */
+    .top-bar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+      gap: 10px;
+    }
+    .lang-selector {
+      display: flex;
+      gap: 6px;
+      background: rgba(20, 20, 30, 0.7);
+      backdrop-filter: blur(15px);
+      border-radius: 40px;
+      padding: 4px;
+    }
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: #ddd;
+      padding: 8px 16px;
+      border-radius: 30px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: 0.2s;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .lang-btn.active {
+      background: #4285f4;
+      color: white;
+      box-shadow: 0 4px 12px rgba(66,133,244,0.4);
+    }
+    .icon-btn {
+      background: rgba(20,20,30,0.7);
+      backdrop-filter: blur(15px);
+      border: none;
+      color: white;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
+    /* بطاقة النتيجة المنبثقة */
+    .result-sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(18, 22, 28, 0.92);
+      backdrop-filter: blur(30px);
+      border-radius: 28px 28px 0 0;
+      padding: 20px 20px 25px;
+      color: white;
+      z-index: 30;
+      transform: translateY(100%);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      max-height: 60vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 -8px 30px rgba(0,0,0,0.7);
+    }
+    .result-sheet.visible {
+      transform: translateY(0);
+    }
+    .sheet-handle {
+      width: 36px;
+      height: 5px;
+      background: rgba(255,255,255,0.4);
+      border-radius: 10px;
+      margin: 0 auto 15px;
+    }
+    .result-text {
+      font-size: 1.6rem;
+      line-height: 2.1;
+      word-break: break-word;
+      white-space: pre-wrap;
+      color: #f1f5f9;
+      text-align: right;
+      overflow-y: auto;
+      max-height: 40vh;
+      padding-bottom: 10px;
+      font-weight: 400;
+    }
+    .sheet-actions {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      background: rgba(255,255,255,0.12);
+      border: none;
+      color: #e2e8f0;
+      padding: 10px 22px;
+      border-radius: 30px;
+      font-weight: 500;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .action-btn.primary {
+      background: #4285f4;
+      color: white;
+    }
+    .action-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
 
-        .container {
-            max-width: 700px;
-            width: 100%;
-            background: var(--card-bg);
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-            box-sizing: border-box;
-        }
+    /* زر الالتقاط الدائري */
+    .capture-zone {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .capture-btn {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: white;
+      border: 4px solid rgba(0,0,0,0.3);
+      box-shadow: 0 6px 25px rgba(0,0,0,0.6);
+      cursor: pointer;
+      transition: transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .capture-btn:active {
+      transform: scale(0.94);
+    }
+    .live-badge {
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(10px);
+      color: #ff4d4d;
+      padding: 8px 16px;
+      border-radius: 30px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .live-badge.active {
+      color: #4eff4e;
+    }
 
-        h1 {
-            text-align: center;
-            color: var(--primary-color);
-            margin-bottom: 25px;
-            font-size: 24px;
-        }
-
-        .upload-section {
-            border: 2px dashed #dadce0;
-            padding: 30px;
-            border-radius: 12px;
-            text-align: center;
-            cursor: pointer;
-            transition: 0.3s;
-            background: #fafafa;
-        }
-
-        .upload-section:hover {
-            border-color: var(--primary-color);
-            background: #f1f3f4;
-        }
-
-        #fileInput {
-            display: none;
-        }
-
-        .btn-capture {
-            display: inline-block;
-            margin-top: 15px;
-            padding: 10px 20px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .btn-capture:hover {
-            background-color: #1557b0;
-        }
-
-        #previewImage {
-            max-width: 100%;
-            max-height: 350px;
-            margin-top: 20px;
-            border-radius: 8px;
-            display: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        /* شريط التحميل Progress Bar */
-        .status-container {
-            margin-top: 25px;
-            display: none;
-        }
-
-        .progress-bar {
-            width: 100%;
-            background-color: #e8eaed;
-            border-radius: 8px;
-            overflow: hidden;
-            height: 10px;
-            margin-top: 8px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            background-color: var(--primary-color);
-            transition: width 0.1s linear;
-        }
-
-        #statusText {
-            font-size: 14px;
-            font-weight: 500;
-            color: #5f6368;
-        }
-
-        /* صندوق النتيجة */
-        .result-section {
-            margin-top: 30px;
-        }
-
-        label {
-            font-weight: bold;
-            display: block;
-            margin-bottom: 8px;
-            color: var(--primary-color);
-        }
-
-        textarea {
-            width: 100%;
-            height: 180px;
-            padding: 12px;
-            border: 1px solid #dadce0;
-            border-radius: 8px;
-            resize: vertical;
-            font-size: 15px;
-            line-height: 1.6;
-            box-sizing: border-box;
-            background: #fafafa;
-        }
-
-        .btn-copy {
-            background: #34a853;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-top: 10px;
-            font-weight: 500;
-        }
-        .btn-copy:hover { background: #2b8a44; }
-    </style>
+    canvas {
+      display: none;
+    }
+    @media (max-width: 600px) {
+      .result-text {
+        font-size: 1.3rem;
+      }
+      .capture-btn {
+        width: 64px;
+        height: 64px;
+      }
+    }
+  </style>
 </head>
 <body>
+<div class="scanner-container">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="preprocessCanvas"></canvas>
 
-    <div class="container">
-        <h1>🔍 قارئ النصوص الذكي (OCR)</h1>
-        
-        <!-- منطقة رفع الصورة -->
-        <div class="upload-section" onclick="document.getElementById('fileInput').click()">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#5f6368" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            <p>اضغط هنا لرفع صورة أو فتح الكاميرا لنسخ النص</p>
-            <input type="file" id="fileInput" accept="image/*">
-        </div>
-
-        <center>
-            <!-- للموبايل سيتيح هذا الخيار فتح الكاميرا مباشرة -->
-            <button class="btn-capture" onclick="document.getElementById('fileInput').click()">📸 التقاط صورة</button>
-        </center>
-
-        <!-- عرض الصورة المرفوعة للـتأكيد -->
-        <center><img id="previewImage" alt="معاينة المستند"></center>
-
-        <!-- مؤشرات عملية المعالجة وقراءة النص -->
-        <div class="status-container" id="statusContainer">
-            <div id="statusText">جاري تهيئة المحرك الذكي...</div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-        </div>
-
-        <!-- صندوق استخراج النص -->
-        <div class="result-section">
-            <label for="resultText">النص المستخرج:</label>
-            <textarea id="resultText" placeholder="سيظهر النص المستخرج هنا... يمكنك تعديله أو نسخه مباشرة."></textarea>
-            <button class="btn-copy" id="copyBtn" onclick="copyText()">📋 نسخ النص</button>
-        </div>
+  <!-- شريط علوي -->
+  <div class="top-bar">
+    <div class="lang-selector">
+      <button class="lang-btn active" data-lang="ara+eng">عربي + إنجليزي</button>
+      <button class="lang-btn" data-lang="ara">عربي</button>
+      <button class="lang-btn" data-lang="eng">إنجليزي</button>
     </div>
+    <button class="icon-btn" id="btnSwitchCam" title="تبديل الكاميرا">🔄</button>
+  </div>
 
-    <script>
-        /* --- منطق العمل والذكاء الاصطناعي (JavaScript) --- */
-        const fileInput = document.getElementById('fileInput');
-        const previewImage = document.getElementById('previewImage');
-        const statusContainer = document.getElementById('statusContainer');
-        const statusText = document.getElementById('statusText');
-        const progressFill = document.getElementById('progressFill');
-        const resultText = document.getElementById('resultText');
+  <!-- زر الالتقاط ومنطقة الحالة -->
+  <div class="capture-zone">
+    <div class="live-badge" id="liveBadge">⏸️</div>
+    <button class="capture-btn" id="btnCapture" title="التقاط صورة">
+      <div style="width:54px;height:54px;border-radius:50%;background:#4285f4;"></div>
+    </button>
+    <button class="icon-btn" id="btnToggleLive" title="تشغيل/إيقاف البث المباشر" style="background:rgba(20,20,30,0.7);">🔴</button>
+  </div>
 
-        // استماع لحدث تغيير الملف (عند رفع صورة أو التقاطها)
-        fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+  <!-- بطاقة النتيجة -->
+  <div class="result-sheet" id="resultSheet">
+    <div class="sheet-handle"></div>
+    <div class="result-text" id="resultText"></div>
+    <div class="sheet-actions">
+      <button class="action-btn" id="btnCopy">📋 نسخ</button>
+      <button class="action-btn" id="btnSearch">🔍 بحث</button>
+      <button class="action-btn" id="btnTranslate">🌐 ترجمة</button>
+      <button class="action-btn" id="btnClose">✕ إغلاق</button>
+    </div>
+  </div>
+</div>
 
-            // عرض الصورة للمستخدم
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                previewImage.src = event.target.result;
-                previewImage.style.display = 'block';
-                
-                // بدء عملية قراءة النص من الصورة
-                processImage(event.target.result);
-            }
-            reader.readAsDataURL(file);
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+  (function() {
+    const video = document.getElementById('video');
+    const preCanvas = document.getElementById('preprocessCanvas');
+    const resultText = document.getElementById('resultText');
+    const resultSheet = document.getElementById('resultSheet');
+    const btnCapture = document.getElementById('btnCapture');
+    const btnToggleLive = document.getElementById('btnToggleLive');
+    const btnSwitchCam = document.getElementById('btnSwitchCam');
+    const btnCopy = document.getElementById('btnCopy');
+    const btnSearch = document.getElementById('btnSearch');
+    const btnTranslate = document.getElementById('btnTranslate');
+    const btnClose = document.getElementById('btnClose');
+    const liveBadge = document.getElementById('liveBadge');
+    const langBtns = document.querySelectorAll('.lang-btn');
+
+    let stream = null;
+    let currentFacingMode = 'environment';
+    let selectedLang = 'ara+eng';
+    let ocrWorker = null;
+    let liveMode = false;
+    let liveInterval = null;
+    let isProcessing = false;
+    let lastRecognizedText = '';
+
+    // --- معالجة الصورة (Otsu) ---
+    function applyOtsuThreshold(imageData) {
+      const data = imageData.data;
+      const histogram = new Array(256).fill(0);
+      for (let i = 0; i < data.length; i += 4) histogram[data[i]]++;
+      const total = imageData.width * imageData.height;
+      let sum = 0;
+      for (let i = 0; i < 256; i++) sum += i * histogram[i];
+      let sumB = 0, wB = 0, wF = 0, varMax = 0, threshold = 128;
+      for (let t = 0; t < 256; t++) {
+        wB += histogram[t];
+        if (wB === 0) continue;
+        wF = total - wB;
+        if (wF === 0) break;
+        sumB += t * histogram[t];
+        const mB = sumB / wB;
+        const mF = (sum - sumB) / wF;
+        const varBetween = wB * wF * (mB - mF) ** 2;
+        if (varBetween > varMax) {
+          varMax = varBetween;
+          threshold = t;
+        }
+      }
+      for (let i = 0; i < data.length; i += 4) {
+        const val = data[i] > threshold ? 255 : 0;
+        data[i] = data[i+1] = data[i+2] = val;
+      }
+      return imageData;
+    }
+
+    async function preprocessImage(imageDataUrl) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = preCanvas;
+          const ctx = c.getContext('2d');
+          let width = img.width, height = img.height;
+          const maxDim = 1000;
+          if (width > maxDim || height > maxDim) {
+            const scale = Math.min(maxDim / width, maxDim / height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          c.width = width; c.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          const imageData = ctx.getImageData(0, 0, width, height);
+          const data = imageData.data;
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i], g = data[i+1], b = data[i+2];
+            let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            gray = (gray - 128) * 2.2 + 128;
+            gray = Math.min(255, Math.max(0, gray));
+            data[i] = data[i+1] = data[i+2] = gray;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          const thresholded = applyOtsuThreshold(ctx.getImageData(0, 0, width, height));
+          ctx.putImageData(thresholded, 0, 0);
+          resolve(c.toDataURL('image/png'));
+        };
+        img.src = imageDataUrl;
+      });
+    }
+
+    async function initOCRWorker() {
+      if (ocrWorker) { try { await ocrWorker.terminate(); } catch (e) {} }
+      ocrWorker = null;
+      try {
+        ocrWorker = await Tesseract.createWorker(selectedLang, 1, { logger: () => {} });
+        await ocrWorker.setParameters({
+          tessedit_pageseg_mode: '3',
+          preserve_interword_spaces: '1',
+          tessedit_ocr_engine_mode: '2',
         });
+      } catch (err) { console.error(err); }
+    }
 
-        // دالة معالجة الصورة واستخراج النصوص
-        async function processImage(imageSrc) {
-            // إظهار شريط التحميل وتصفير النتيجة السابقة
-            statusContainer.style.display = 'block';
-            resultText.value = '';
-            progressFill.style.width = '0%';
+    async function startCamera(facingMode = currentFacingMode) {
+      stopCamera();
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false
+        });
+        video.srcObject = stream;
+        currentFacingMode = facingMode;
+        video.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'none';
+        await video.play();
+      } catch (err) { console.error(err); }
+    }
 
-            try {
-                // ملاحظة: قمنا بتمرير اللغتين 'ara' (العربية) و 'eng' (الإنجليزية) معاً ليعمل مثل جوجل لينز في قراءة النصوص المختلطة
-                const worker = await Tesseract.createWorker(['ara', 'eng']);
-                
-                // متابعة تقدم العملية لتحديث شريط التحميل (Progress)
-                worker.logger = (m) => {
-                    if (m.status === 'recognizing text') {
-                        const progressPercentage = Math.round(m.progress * 100);
-                        statusText.innerText = `جاري قراءة وتحليل النص... (${progressPercentage}%)`;
-                        progressFill.style.width = `${progressPercentage}%`;
-                    } else {
-                        statusText.innerText = 'تحضير أدوات المعالجة الحيوية...';
-                    }
-                };
+    function stopCamera() {
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      stopLiveMode();
+    }
 
-                // تنفيذ عملية الـ OCR
-                const { data: { text } } = await worker.recognize(imageSrc);
-                
-                // إنهاء عمل الـ Worker لتحرير ذاكرة المتصفح والمحافظة على السرعة
-                await worker.terminate();
+    function switchCamera() {
+      startCamera(currentFacingMode === 'environment' ? 'user' : 'environment');
+    }
 
-                // عرض النتيجة النهائية للمستخدم
-                if(text.trim() === "") {
-                    resultText.value = "لم يتم العثور على نصوص واضحة في هذه الصورة. تأكد من جودة الإضاءة والخط.";
-                } else {
-                    resultText.value = text;
-                }
-                statusText.innerText = '✅ تمت المعالجة بنجاح!';
-                
-            } catch (error) {
-                console.error(error);
-                statusText.innerText = '❌ عذراً، حدث خطأ أثناء معالجة الصورة.';
-                alert('فشلت قراءة الصورة، يرجى المحاولة مرة أخرى بصورة أكثر وضوحاً.');
-            }
+    async function recognizeImage(imageDataUrl) {
+      if (!ocrWorker) await initOCRWorker();
+      if (!ocrWorker) return '';
+      try {
+        const processed = await preprocessImage(imageDataUrl);
+        const { data: { text } } = await ocrWorker.recognize(processed);
+        return text.trim();
+      } catch (e) { return ''; }
+    }
+
+    function captureFrame() {
+      if (!stream || video.readyState < 2) return null;
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth; c.height = video.videoHeight;
+      const ctx = c.getContext('2d');
+      if (currentFacingMode === 'user') { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
+      ctx.drawImage(video, 0, 0);
+      return c.toDataURL('image/png');
+    }
+
+    function showResult(text) {
+      resultText.textContent = text;
+      resultSheet.classList.add('visible');
+    }
+
+    function hideResult() {
+      resultSheet.classList.remove('visible');
+      resultText.textContent = '';
+    }
+
+    // --- البث المباشر ---
+    function startLiveMode() {
+      if (!stream) return;
+      liveMode = true;
+      btnToggleLive.textContent = '🔴';
+      liveBadge.textContent = '🔴 مباشر';
+      liveBadge.classList.add('active');
+      if (liveInterval) clearInterval(liveInterval);
+      liveInterval = setInterval(async () => {
+        if (!liveMode || isProcessing) return;
+        const frame = captureFrame();
+        if (!frame) return;
+        isProcessing = true;
+        const text = await recognizeImage(frame);
+        if (text && text !== lastRecognizedText) {
+          lastRecognizedText = text;
+          showResult(text);
         }
+        isProcessing = false;
+      }, 1200);
+    }
 
-        // دالة مساعدة لنسخ النص بضغطة زر
-        function copyText() {
-            if(!resultText.value) return;
-            resultText.select();
-            document.execCommand('copy');
-            const copyBtn = document.getElementById('copyBtn');
-            copyBtn.innerText = '✔ تم النسخ!';
-            setTimeout(() => { copyBtn.innerText = '📋 نسخ النص'; }, 2000);
-        }
-    </script>
+    function stopLiveMode() {
+      liveMode = false;
+      if (liveInterval) { clearInterval(liveInterval); liveInterval = null; }
+      btnToggleLive.textContent = '🔴';
+      liveBadge.textContent = '⏸️';
+      liveBadge.classList.remove('active');
+    }
+
+    function toggleLiveMode() {
+      if (liveMode) stopLiveMode(); else startLiveMode();
+    }
+
+    async function takeSnapshot() {
+      if (!stream) return;
+      const frame = captureFrame();
+      if (!frame) return;
+      const text = await recognizeImage(frame);
+      if (text) {
+        showResult(text);
+        lastRecognizedText = text;
+      }
+    }
+
+    // --- إجراءات البطاقة ---
+    function copyText() {
+      const text = resultText.textContent;
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btnCopy.innerHTML;
+        btnCopy.innerHTML = '✅ تم النسخ';
+        setTimeout(() => { btnCopy.innerHTML = orig; }, 2000);
+      });
+    }
+
+    function searchText() {
+      const text = resultText.textContent;
+      if (text) window.open(`https://www.google.com/search?q=${encodeURIComponent(text)}`, '_blank');
+    }
+
+    function translateText() {
+      const text = resultText.textContent;
+      if (text) window.open(`https://translate.google.com/?text=${encodeURIComponent(text)}`, '_blank');
+    }
+
+    // --- ربط الأحداث ---
+    langBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        langBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedLang = btn.dataset.lang;
+        initOCRWorker();
+        hideResult();
+      });
+    });
+
+    btnCapture.addEventListener('click', takeSnapshot);
+    btnToggleLive.addEventListener('click', toggleLiveMode);
+    btnSwitchCam.addEventListener('click', switchCamera);
+    btnCopy.addEventListener('click', copyText);
+    btnSearch.addEventListener('click', searchText);
+    btnTranslate.addEventListener('click', translateText);
+    btnClose.addEventListener('click', hideResult);
+
+    // سحب وإفلات
+    document.body.addEventListener('dragover', e => e.preventDefault());
+    document.body.addEventListener('drop', async e => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          const text = await recognizeImage(ev.target.result);
+          if (text) showResult(text);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // بدء التشغيل
+    initOCRWorker().then(() => startCamera('environment'));
+    window.addEventListener('beforeunload', () => {
+      stopLiveMode();
+      stopCamera();
+      if (ocrWorker) ocrWorker.terminate();
+    });
+  })();
+</script>
 </body>
 </html>
