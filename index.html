@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-  <title>الماسح الفوري | Live OCR عربي وإنجليزي</title>
+  <title>الماسح الفائق | OCR فائق الدقة</title>
   <style>
     * {
       margin: 0;
@@ -17,17 +17,15 @@
       width: 100vw;
       overflow: hidden;
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
       color: white;
     }
-    /* وضع الكاميرا ملء الشاشة */
     .scanner-container {
       position: relative;
       width: 100%;
       height: 100%;
       background: #000;
+      display: flex;
+      flex-direction: column;
     }
     video {
       position: absolute;
@@ -36,47 +34,41 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      /* سيتم التحكم في الانعكاس عبر الكود حسب الكاميرا */
+      z-index: 0;
     }
     canvas {
       display: none;
     }
-    /* طبقة واجهة المستخدم */
     .ui-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
+      position: relative;
+      z-index: 10;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      padding: 20px;
-      z-index: 10;
+      height: 100%;
+      pointer-events: none;
     }
     .ui-overlay > * {
       pointer-events: auto;
     }
-    /* شريط الحالة العلوي */
     .top-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(12px);
-      border-radius: 40px;
-      padding: 10px 20px;
-      margin: 0 5px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(20px);
+      border-radius: 0 0 30px 30px;
+      padding: 8px 16px;
+      margin: 0 8px;
       color: white;
       font-weight: 500;
+      transition: 0.3s;
     }
     .lang-selector {
       display: flex;
       gap: 6px;
     }
     .lang-btn {
-      background: rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.15);
       border: none;
       color: #ddd;
       padding: 8px 14px;
@@ -92,11 +84,11 @@
       box-shadow: 0 0 18px rgba(56,239,125,0.5);
     }
     .switch-cam-btn {
-      background: rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.25);
       border: none;
       color: white;
-      width: 42px;
-      height: 42px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
       font-size: 1.3rem;
       display: flex;
@@ -104,7 +96,6 @@
       justify-content: center;
       cursor: pointer;
     }
-    /* إطار التركيز */
     .focus-frame {
       position: absolute;
       top: 50%;
@@ -112,7 +103,7 @@
       transform: translate(-50%, -50%);
       width: 280px;
       height: 100px;
-      border: 2px dashed rgba(255,255,255,0.8);
+      border: 2px dashed rgba(255,255,255,0.9);
       border-radius: 24px;
       box-shadow: 0 0 30px rgba(0,0,0,0.5);
       pointer-events: none;
@@ -131,87 +122,114 @@
       border-radius: 20px;
       white-space: nowrap;
     }
-    /* شريط النتيجة السفلي */
+    /* لوحة النتيجة العملاقة */
     .result-panel {
-      background: rgba(10, 15, 22, 0.85);
-      backdrop-filter: blur(25px);
-      border-radius: 30px;
-      padding: 18px 22px;
-      margin: 0 10px 10px;
-      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(10, 15, 22, 0.92);
+      backdrop-filter: blur(30px);
+      border-radius: 32px 32px 0 0;
+      padding: 20px 22px 15px;
+      margin: auto 0 0 0;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-bottom: none;
       color: white;
-      max-height: 140px;
-      overflow-y: auto;
+      height: 60vh; /* تغطي 60% من الشاشة */
+      min-height: 250px;
+      display: flex;
+      flex-direction: column;
       transition: 0.3s;
+      width: 100%;
+    }
+    .result-content {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 12px;
+      margin-bottom: 10px;
     }
     .result-text {
-      font-size: 1.1rem;
-      line-height: 1.7;
+      font-size: 1.8rem;
+      line-height: 2.2;
       word-break: break-word;
       white-space: pre-wrap;
-      color: #f0f4f8;
-      min-height: 28px;
+      color: #f8fafc;
+      min-height: 40px;
+      text-align: right;
+      font-weight: 500;
     }
     .result-text:empty::after {
-      content: "وجه الكاميرا نحو أي نص...";
-      color: #6b7280;
+      content: "وجّه الكاميرا نحو أي نص...";
+      color: #64748b;
+      font-size: 1.2rem;
     }
     .action-buttons {
       display: flex;
       gap: 12px;
       justify-content: center;
-      margin-top: 8px;
+      flex-wrap: wrap;
+      margin-top: 5px;
     }
     .btn {
-      background: rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.12);
       border: none;
       color: white;
-      padding: 10px 22px;
+      padding: 12px 22px;
       border-radius: 40px;
       font-weight: 600;
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       transition: 0.2s;
-    }
-    .btn-primary {
-      background: #2563eb;
-      box-shadow: 0 8px 20px rgba(37,99,235,0.4);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.15);
     }
     .btn-live {
       background: #38ef7d;
       color: #0a0f14;
       font-weight: 700;
+      border: none;
+      box-shadow: 0 4px 20px rgba(56,239,125,0.5);
     }
     .btn-live.active {
       background: #ef4444;
       color: white;
     }
     .status-badge {
-      font-size: 0.7rem;
-      background: rgba(255,255,255,0.2);
-      padding: 4px 12px;
+      font-size: 0.75rem;
+      background: rgba(255,255,255,0.15);
+      padding: 6px 14px;
       border-radius: 30px;
-      margin-right: 10px;
     }
-    @media (max-width: 500px) {
-      .focus-frame {
-        width: 240px;
-        height: 80px;
+    @media (max-width: 600px) {
+      .result-text {
+        font-size: 1.4rem;
       }
+      .focus-frame {
+        width: 220px;
+        height: 70px;
+      }
+    }
+    .result-content::-webkit-scrollbar {
+      width: 8px;
+    }
+    .result-content::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+    }
+    .result-content::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.35);
+      border-radius: 10px;
     }
   </style>
 </head>
 <body>
-<div class="scanner-container" id="scannerContainer">
+<div class="scanner-container">
   <video id="video" autoplay playsinline muted></video>
   <canvas id="preprocessCanvas"></canvas>
   <div class="focus-frame"></div>
 
   <div class="ui-overlay">
-    <div class="top-bar">
+    <div class="top-bar" id="topBar">
       <div class="lang-selector">
         <button class="lang-btn active" data-lang="ara+eng">ع+إنجليزي</button>
         <button class="lang-btn" data-lang="ara">عربي</button>
@@ -221,12 +239,14 @@
     </div>
 
     <div class="result-panel" id="resultPanel">
-      <div class="result-text" id="resultText"></div>
+      <div class="result-content">
+        <div class="result-text" id="resultText"></div>
+      </div>
       <div class="action-buttons">
         <span class="status-badge" id="liveStatus">⏸️ متوقف</span>
         <button class="btn btn-live" id="btnToggleLive">🔴 بث مباشر</button>
         <button class="btn" id="btnCopy" style="display:none;">📋 نسخ</button>
-        <button class="btn" id="btnSnapshot">📷 التقاط</button>
+        <button class="btn" id="btnSnapshot">📷 التقاط دقيق</button>
       </div>
     </div>
   </div>
@@ -235,7 +255,6 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
   (function() {
-    // --- العناصر ---
     const video = document.getElementById('video');
     const preCanvas = document.getElementById('preprocessCanvas');
     const resultText = document.getElementById('resultText');
@@ -246,9 +265,8 @@
     const liveStatus = document.getElementById('liveStatus');
     const langBtns = document.querySelectorAll('.lang-btn');
 
-    // --- الحالة ---
     let stream = null;
-    let currentFacingMode = 'environment'; // خلفية
+    let currentFacingMode = 'environment';
     let selectedLang = 'ara+eng';
     let ocrWorker = null;
     let liveMode = false;
@@ -256,38 +274,110 @@
     let isProcessing = false;
     let lastRecognizedText = '';
 
-    // --- إعداد اللغة ---
-    langBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        langBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedLang = btn.dataset.lang;
-        initOCRWorker();
-      });
-    });
+    // --- معالجة الصورة المتطورة (Otsu thresholding) ---
+    function applyOtsuThreshold(imageData) {
+      const data = imageData.data;
+      const histogram = new Array(256).fill(0);
+      // حساب الرسم البياني للتدرج الرمادي
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = data[i]; // R=G=B بعد التدرج الرمادي
+        histogram[gray]++;
+      }
+      const total = (imageData.width * imageData.height);
+      let sum = 0;
+      for (let i = 0; i < 256; i++) sum += i * histogram[i];
+      let sumB = 0;
+      let wB = 0;
+      let wF = 0;
+      let varMax = 0;
+      let threshold = 128;
+      for (let t = 0; t < 256; t++) {
+        wB += histogram[t];
+        if (wB === 0) continue;
+        wF = total - wB;
+        if (wF === 0) break;
+        sumB += t * histogram[t];
+        const mB = sumB / wB;
+        const mF = (sum - sumB) / wF;
+        const varBetween = wB * wF * (mB - mF) ** 2;
+        if (varBetween > varMax) {
+          varMax = varBetween;
+          threshold = t;
+        }
+      }
+      // تطبيق العتبة (أبيض للخلفية، أسود للنص)
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = data[i];
+        const newVal = gray > threshold ? 255 : 0;
+        data[i] = data[i+1] = data[i+2] = newVal;
+      }
+      return imageData;
+    }
 
+    async function preprocessImage(imageDataUrl) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = preCanvas;
+          const ctx = c.getContext('2d');
+          // تكبير الصورة 2x لتحسين تفاصيل الحروف
+          let width = img.width * 2;
+          let height = img.height * 2;
+          const maxDim = 1200;
+          if (width > maxDim || height > maxDim) {
+            const scale = Math.min(maxDim / width, maxDim / height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          c.width = width;
+          c.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          // الحصول على بيانات الصورة
+          const imageData = ctx.getImageData(0, 0, width, height);
+          const data = imageData.data;
+          // 1. تحويل إلى تدرج الرمادي وزيادة التباين
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i+1];
+            const b = data[i+2];
+            let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            // زيادة التباين
+            gray = (gray - 128) * 1.8 + 128;
+            gray = Math.min(255, Math.max(0, gray));
+            data[i] = data[i+1] = data[i+2] = gray;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          // 2. تطبيق عتبة Otsu
+          const thresholdedData = applyOtsuThreshold(ctx.getImageData(0, 0, width, height));
+          ctx.putImageData(thresholdedData, 0, 0);
+          resolve(c.toDataURL('image/png'));
+        };
+        img.src = imageDataUrl;
+      });
+    }
+
+    // --- إعداد Tesseract مع أفضل المعاملات ---
     async function initOCRWorker() {
       if (ocrWorker) {
         try { await ocrWorker.terminate(); } catch (e) {}
         ocrWorker = null;
       }
-      setStatusText('⏳ تحميل بيانات اللغة...');
+      updateStatusBadge('⏳ تحميل...');
       try {
         ocrWorker = await Tesseract.createWorker(selectedLang, 1, {
           logger: m => {
-            if (m.status === 'recognizing text' && liveMode) {
-              // لا نحدّث الحالة في البث المباشر لتجنب الوميض
-            }
+            if (m.status === 'recognizing text' && liveMode) { /* صامت */ }
           }
         });
         await ocrWorker.setParameters({
-          tessedit_pageseg_mode: '6',
+          tessedit_pageseg_mode: '3', // تلقائي بالكامل (أفضل للصور المتنوعة)
           preserve_interword_spaces: '1',
+          tessedit_ocr_engine_mode: '2', // محرك LSTM فقط
         });
-        setStatusText('✅ جاهز');
+        updateStatusBadge('✅ جاهز');
       } catch (err) {
         console.error(err);
-        setStatusText('❌ فشل التحميل');
+        updateStatusBadge('❌ خطأ');
         ocrWorker = null;
       }
     }
@@ -299,8 +389,8 @@
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: facingMode },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
           },
           audio: false
         });
@@ -310,10 +400,10 @@
         btnSwitchCam.disabled = false;
         await new Promise(resolve => video.onloadedmetadata = resolve);
         await video.play();
-        setStatusText('📸 وجه الكاميرا نحو النص');
+        updateStatusBadge('📸 وجّه الكاميرا');
       } catch (err) {
         console.error(err);
-        setStatusText('❌ تعذر فتح الكاميرا');
+        updateStatusBadge('❌ الكاميرا');
         stream = null;
       }
     }
@@ -334,49 +424,6 @@
       startCamera(newMode);
     }
 
-    // --- معالجة الصورة مسبقاً (تحسين الدقة) ---
-    function preprocessImage(imageDataUrl) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const c = preCanvas;
-          const ctx = c.getContext('2d');
-          // تصغير الصورة لتسريع المعالجة (عرض 800px كحد أقصى)
-          let width = img.width;
-          let height = img.height;
-          const maxWidth = 800;
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-          c.width = width;
-          c.height = height;
-          // رسم الصورة
-          ctx.drawImage(img, 0, 0, width, height);
-          // الحصول على بيانات البكسل
-          const imageData = ctx.getImageData(0, 0, width, height);
-          const data = imageData.data;
-          // تحويل إلى تدرج الرمادي وزيادة التباين
-          for (let i = 0; i < data.length; i += 4) {
-            const r = data[i];
-            const g = data[i+1];
-            const b = data[i+2];
-            // تدرج الرمادي
-            let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-            // زيادة التباين (simple contrast stretch)
-            gray = (gray - 128) * 1.6 + 128;
-            // قص القيم
-            gray = Math.min(255, Math.max(0, gray));
-            data[i] = data[i+1] = data[i+2] = gray;
-          }
-          ctx.putImageData(imageData, 0, 0);
-          resolve(c.toDataURL('image/png'));
-        };
-        img.src = imageDataUrl;
-      });
-    }
-
-    // --- دالة التعرف (تستخدم من الالتقاط ومن البث المباشر) ---
     async function recognizeImage(imageDataUrl) {
       if (!ocrWorker) {
         await initOCRWorker();
@@ -387,12 +434,11 @@
         const { data: { text } } = await ocrWorker.recognize(processed);
         return text.trim();
       } catch (e) {
-        console.error('OCR error:', e);
+        console.error(e);
         return '';
       }
     }
 
-    // --- التقاط إطار من الفيديو ---
     function captureFrame() {
       if (!stream || video.readyState < 2) return null;
       const c = document.createElement('canvas');
@@ -403,7 +449,7 @@
       return c.toDataURL('image/png');
     }
 
-    // --- وضع البث المباشر (Live Scan) ---
+    // --- البث المباشر ---
     function startLiveMode() {
       if (!stream) {
         alert('يرجى تشغيل الكاميرا أولاً');
@@ -413,9 +459,8 @@
       btnToggleLive.textContent = '⏹️ إيقاف المباشر';
       btnToggleLive.classList.add('active');
       liveStatus.textContent = '🔴 مباشر';
-      setStatusText('🔍 مسح مباشر...');
-      // تشغيل التعرف كل 900 مللي ثانية
       if (liveInterval) clearInterval(liveInterval);
+      // تباعد 1.2 ثانية لتلقي إطارات أوضح
       liveInterval = setInterval(async () => {
         if (!liveMode || isProcessing) return;
         const frame = captureFrame();
@@ -425,10 +470,10 @@
         if (text && text !== lastRecognizedText) {
           lastRecognizedText = text;
           resultText.textContent = text;
-          btnCopy.style.display = 'inline-block';
+          btnCopy.style.display = 'inline-flex';
         }
         isProcessing = false;
-      }, 900);
+      }, 1200);
     }
 
     function stopLiveMode() {
@@ -440,39 +485,34 @@
       btnToggleLive.textContent = '🔴 بث مباشر';
       btnToggleLive.classList.remove('active');
       liveStatus.textContent = '⏸️ متوقف';
-      setStatusText('وضع الالتقاط اليدوي');
     }
 
     function toggleLiveMode() {
-      if (liveMode) {
-        stopLiveMode();
-      } else {
-        startLiveMode();
-      }
+      if (liveMode) stopLiveMode();
+      else startLiveMode();
     }
 
-    // --- لقطة يدوية واحدة ---
+    // --- لقطة يدوية بدقة عالية ---
     async function takeSnapshot() {
       if (!stream) {
         alert('شغّل الكاميرا أولاً');
         return;
       }
-      setStatusText('📷 جاري المعالجة...');
+      updateStatusBadge('📷 معالجة دقيقة...');
       const frame = captureFrame();
       if (!frame) return;
       const text = await recognizeImage(frame);
       if (text) {
         resultText.textContent = text;
         lastRecognizedText = text;
-        btnCopy.style.display = 'inline-block';
-        setStatusText('✅ تم التعرف');
+        btnCopy.style.display = 'inline-flex';
+        updateStatusBadge('✅ تم');
       } else {
         resultText.textContent = '';
-        setStatusText('⚠️ لم يتم التعرف على نص');
+        updateStatusBadge('⚠️ لم يتم التعرف');
       }
     }
 
-    // --- نسخ النص ---
     function copyText() {
       const text = resultText.textContent;
       if (!text) return;
@@ -483,12 +523,26 @@
       });
     }
 
-    function setStatusText(msg) {
-      // يمكن عرضها في مكان مخصص إن أردنا
-      console.log('Status:', msg);
+    function updateStatusBadge(msg) {
+      if (!liveMode) liveStatus.textContent = msg;
     }
 
-    // --- دعم السحب والإفلات (للمرونة) ---
+    // --- الأحداث ---
+    langBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        langBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedLang = btn.dataset.lang;
+        initOCRWorker();
+      });
+    });
+
+    btnToggleLive.addEventListener('click', toggleLiveMode);
+    btnSnapshot.addEventListener('click', takeSnapshot);
+    btnSwitchCam.addEventListener('click', switchCamera);
+    btnCopy.addEventListener('click', copyText);
+
+    // سحب وإفلات
     document.body.addEventListener('dragover', e => e.preventDefault());
     document.body.addEventListener('drop', async e => {
       e.preventDefault();
@@ -499,32 +553,23 @@
           const text = await recognizeImage(ev.target.result);
           if (text) {
             resultText.textContent = text;
-            btnCopy.style.display = 'inline-block';
-            setStatusText('✅ تم مسح الصورة المسحوبة');
+            btnCopy.style.display = 'inline-flex';
           }
         };
         reader.readAsDataURL(file);
       }
     });
 
-    // --- الأحداث ---
-    btnToggleLive.addEventListener('click', toggleLiveMode);
-    btnSnapshot.addEventListener('click', takeSnapshot);
-    btnSwitchCam.addEventListener('click', switchCamera);
-    btnCopy.addEventListener('click', copyText);
-
-    // --- بدء التشغيل ---
+    // البدء
     initOCRWorker().then(() => {
       startCamera(currentFacingMode);
     });
 
-    // تنظيف
     window.addEventListener('beforeunload', () => {
       stopLiveMode();
       stopCamera();
       if (ocrWorker) ocrWorker.terminate();
     });
-
   })();
 </script>
 </body>
