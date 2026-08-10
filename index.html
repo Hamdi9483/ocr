@@ -14,13 +14,14 @@
         #result-box { margin-top: 20px; padding: 15px; background: #fff; border: 1px solid #ccc; border-radius: 5px; max-width: 500px; margin-left: auto; margin-right: auto; word-break: break-all; }
         #error-msg { color: white; background: red; padding: 10px; border-radius: 5px; margin-top: 10px; display: none; }
     </style>
-    <!-- استدعاء الإصدار المستقر للمكتبة من الـ UMD لتجنب مشاكل استيراد الأكواد -->
-    <script src="https://unpkg.com"></script>
+    
+    <!-- تحديث رابط المكتبة إلى سيرفر cndjs العالمي والأكثر استقراراً -->
+    <script src="https://cloudflare.com" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
 
     <h2>ماسح باركود الهويات (PDF417)</h2>
-    <p>يرجى الضغط على الزر أدناه والموافقة على إذن الكاميرا</p>
+    <p>قم بتوجيه الباركود نحو الكاميرا بعد تشغيلها</p>
 
     <div id="video-container">
         <video id="video" autoplay playsinline muted></video>
@@ -55,45 +56,53 @@
                 isScanning = false;
                 errorMsg.style.display = "none";
             } else {
-                resultText.innerText = "جاري تهيئة الكاميرا...";
+                resultText.innerText = "جاري تهيئة الكاميرا وفحص المكتبة...";
                 errorMsg.style.display = "none";
 
+                // التحقق الفوري من أن المكتبة تم تحميلها بنجاح في المتصفح
+                if (typeof ZXing === 'undefined') {
+                    errorMsg.style.display = "block";
+                    errorMsg.innerText = "فشل تحميل مكتبة قارئ الباركود من الإنترنت. يرجى تحديث الصفحة أو التحقق من اتصال الشبكة.";
+                    return;
+                }
+
                 try {
-                    // اختبار أصلي ومباشر لطلب إذن الكاميرا الخلفية من المتصفح لكسر القيود
+                    // طلب تفعيل الكاميرا الخلفية أولاً للهواتف
                     const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: { exact: "environment" } } 
+                        video: { facingMode: { ideal: "environment" } } 
                     }).catch(async () => {
-                        // محاولة ثانية بالكاميرا المتاحة (في حال كان حاسوب محمول بدون كاميرا خلفية)
+                        // حل بديل في حال عدم وجود كاميرا خلفية (مثل لابتوب)
                         return await navigator.mediaDevices.getUserMedia({ video: true });
                     });
 
                     videoElement.srcObject = stream;
 
-                    // تهيئة مكتبة ZXing وقراءة الباركود
+                    // تهيئة دقيقة للمكتبة لقراءة كود PDF417 المخصص للهويات
                     const hints = new Map();
                     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
                     codeReader = new ZXing.BrowserMultiFormatReader(hints);
 
                     codeReader.decodeFromStream(stream, videoElement, (result, err) => {
                         if (result) {
-                            resultText.innerHTML = `<span style="color:green; font-weight:bold;">${result.text}</span>`;
-                            if (navigator.vibrate) navigator.vibrate(200);
+                            // إظهار النتيجة بنجاح عند فك تشفير الكود
+                            resultText.innerHTML = `<span style="color:green; font-weight:bold; font-size: 18px;">${result.text}</span>`;
+                            if (navigator.vibrate) navigator.vibrate(200); // اهتزاز للتنبيه
                         }
                     });
 
                     startBtn.innerText = "إيقاف الكاميرا";
                     startBtn.style.background = "#dc3545";
                     isScanning = true;
-                    resultText.innerText = "توجيه الكاميرا إلى الباركود جاري الآن...";
+                    resultText.innerText = "وجه الكاميرا الآن بدقة وثبات نحو كود الـ PDF417...";
 
                 } catch (error) {
                     console.error(error);
                     errorMsg.style.display = "block";
-                    errorMsg.innerText = `سبب تعطل الكاميرا: ${error.name} - ${error.message}. تأكد من إعطاء إذن الكاميرا للمتصفح.`;
+                    errorMsg.innerText = `حدث خطأ أثناء تشغيل الكاميرا: ${error.message}`;
                 }
             }
         });
     </script>
 </body>
 </html>
-                
+                 
