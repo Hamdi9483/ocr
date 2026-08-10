@@ -3,42 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ماسح PDF417 – حل نهائي</title>
+    <title>ماسح PDF417 – تصميم نصف الشاشة</title>
+    <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: Tahoma, sans-serif;
             background: #1a1a2e;
             color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .camera-section {
+            flex: 1; /* يأخذ نصف المساحة تقريبًا */
+            background: #000;
+            position: relative;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            padding: 15px;
-        }
-        .container {
-            background: #16213e;
-            border-radius: 20px;
-            padding: 20px;
-            max-width: 500px;
-            width: 100%;
-        }
-        h1 { text-align: center; color: #e94560; margin-bottom: 10px; }
-        .browser-note {
-            background: #2a2a4a;
-            padding: 8px;
-            border-radius: 8px;
-            text-align: center;
-            font-size: 0.85rem;
-            margin-bottom: 15px;
-        }
-        .video-box {
-            position: relative;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            margin-bottom: 15px;
-            aspect-ratio: 16/9;
+            min-height: 0; /* مهم لتمكين التقلص */
         }
         video {
             width: 100%;
@@ -51,16 +36,25 @@
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             border: 2px solid #e94560;
-            width: 80%; height: 40%;
+            width: 80%;
+            height: 50%;
             border-radius: 10px;
             pointer-events: none;
-            box-shadow: 0 0 15px rgba(233,69,96,0.6);
+            box-shadow: 0 0 12px rgba(233,69,96,0.5);
         }
-        .controls {
+        .controls-section {
+            background: #16213e;
+            padding: 20px;
+            flex: 1;
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
             gap: 10px;
-            margin-bottom: 15px;
+            overflow-y: auto;
+        }
+        .button-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
         }
         button, .btn {
             background: #0f3460;
@@ -79,195 +73,195 @@
         #fileInput { display: none; }
         .result-box {
             background: #0f3460;
-            padding: 15px;
-            border-radius: 10px;
+            padding: 12px;
+            border-radius: 8px;
             word-break: break-all;
             font-family: monospace;
             text-align: center;
-            min-height: 50px;
-            margin-bottom: 5px;
-        }
-        .status { font-size: 0.85rem; color: #aaa; text-align: center; margin-bottom: 15px; }
-        .mirror-btn {
-            background: #533483;
             font-size: 0.9rem;
+            min-height: 40px;
+        }
+        .status {
+            text-align: center;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+        .warning {
+            background: #ffc107;
+            color: #000;
             padding: 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            text-align: center;
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>📷 ماسح PDF417</h1>
-    <div class="browser-note" id="browserNote">
-        يعمل على Chrome أو Edge مع HTTPS/localhost
-    </div>
-
-    <div class="video-box">
+    <!-- قسم الكاميرا (النصف العلوي) -->
+    <div class="camera-section">
         <video id="video" autoplay playsinline muted></video>
         <div class="scan-frame"></div>
     </div>
 
-    <div class="controls">
-        <button id="startBtn">▶️ بدء الكاميرا</button>
-        <button id="snapBtn">📸 التقط وحلل</button>
-        <button id="stopBtn">⏹️ إيقاف</button>
-        <button id="mirrorBtn" class="mirror-btn">🔄 اعكس الصورة</button>
-        <label for="fileInput" class="btn">📁 رفع صورة</label>
-        <input type="file" id="fileInput" accept="image/*">
+    <!-- قسم الأزرار والنتيجة (النصف السفلي) -->
+    <div class="controls-section">
+        <div id="protocolWarning" class="warning" style="display: none;">
+            ⚠️ الكاميرا تحتاج HTTPS أو localhost. لا تفتح الملف مباشرة!
+        </div>
+        <div class="button-row">
+            <button id="startBtn">▶️ فتح الكاميرا</button>
+            <button id="snapBtn">📸 التقط وحلل</button>
+            <button id="stopBtn">⏹️ إيقاف</button>
+        </div>
+        <div class="button-row">
+            <button id="mirrorBtn">🔄 اعكس الصورة</button>
+            <label for="fileInput" class="btn">📁 رفع صورة</label>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+        <div class="result-box" id="result">لم يتم الاكتشاف بعد</div>
+        <div class="status" id="status">جاهز</div>
     </div>
 
-    <div class="result-box" id="result">لم يتم الاكتشاف بعد</div>
-    <div class="status" id="status">جاهز</div>
-</div>
-<canvas id="canvas" hidden></canvas>
+    <canvas id="canvas" hidden></canvas>
 
-<script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const startBtn = document.getElementById('startBtn');
-    const snapBtn = document.getElementById('snapBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const mirrorBtn = document.getElementById('mirrorBtn');
-    const fileInput = document.getElementById('fileInput');
-    const resultDiv = document.getElementById('result');
-    const statusDiv = document.getElementById('status');
+    <script>
+        // تحذير إذا فتح الملف مباشرة
+        if (window.location.protocol === 'file:') {
+            document.getElementById('protocolWarning').style.display = 'block';
+        }
 
-    let stream = null;
-    let mirrored = false; // لتتبع حالة الانعكاس
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startBtn = document.getElementById('startBtn');
+        const snapBtn = document.getElementById('snapBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const mirrorBtn = document.getElementById('mirrorBtn');
+        const fileInput = document.getElementById('fileInput');
+        const resultDiv = document.getElementById('result');
+        const statusDiv = document.getElementById('status');
 
-    // التحقق من دعم BarcodeDetector
-    if (!('BarcodeDetector' in window)) {
-        document.getElementById('browserNote').innerHTML = 
-            '⚠️ متصفحك لا يدعم BarcodeDetector. استخدم Chrome أو Edge على جهاز حقيقي.';
-    }
+        let stream = null;
+        let mirrored = false;
 
-    // دالة المسح باستخدام BarcodeDetector
-    async function scanImage(imageSource) {
-        try {
-            const formats = ['pdf417']; // نبحث عن PDF417 فقط
-            // يمكن إضافة أنواع أخرى: ['qr_code', 'ean_13', ...]
-            const detector = new BarcodeDetector({ formats });
-            const barcodes = await detector.detect(imageSource);
-            if (barcodes.length > 0) {
-                return barcodes[0].rawValue;
+        // إعداد ZXing لـ PDF417 فقط مع المحاولة الجادة
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        const reader = new ZXing.BrowserMultiFormatReader(hints);
+
+        // دالة مساعدة: تحليل صورة (عنصر img أو canvas)
+        async function decodeFromImage(imageElement) {
+            try {
+                const result = await reader.decodeFromImageElement(imageElement);
+                return result ? result.getText() : null;
+            } catch (err) {
+                if (err instanceof ZXing.NotFoundException) return null;
+                console.error(err);
+                return null;
             }
-            return null;
-        } catch (err) {
-            console.error('خطأ في BarcodeDetector:', err);
-            return null;
         }
-    }
 
-    // بدء الكاميرا
-    async function startCamera() {
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: 'environment', // كاميرا خلفية
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                }
-            });
-            video.srcObject = stream;
-            await video.play();
+        // فتح الكاميرا
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                video.srcObject = stream;
+                await video.play();
 
-            startBtn.style.display = 'none';
-            snapBtn.style.display = 'inline-block';
-            stopBtn.style.display = 'inline-block';
-            statusDiv.textContent = 'الكاميرا جاهزة، وجّه الباركود واضغط "التقط وحلل"';
-        } catch (err) {
-            statusDiv.textContent = 'فشل فتح الكاميرا: ' + err.message;
-            alert('تأكد من السماح للكاميرا وأنك تستخدم HTTPS/localhost.');
+                startBtn.style.display = 'none';
+                snapBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'inline-block';
+                statusDiv.textContent = 'الكاميرا جاهزة. وجّه الباركود واضغط "التقط وحلل"';
+            } catch (err) {
+                statusDiv.textContent = 'فشل فتح الكاميرا: ' + err.message;
+                alert('تأكد من السماح للكاميرا وأنك تستخدم HTTPS/localhost.');
+            }
         }
-    }
 
-    // إيقاف الكاميرا
-    function stopCamera() {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            stream = null;
+        // إيقاف الكاميرا
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            startBtn.style.display = 'inline-block';
+            snapBtn.style.display = 'none';
+            stopBtn.style.display = 'none';
+            statusDiv.textContent = 'متوقف';
         }
-        video.srcObject = null;
-        startBtn.style.display = 'inline-block';
-        snapBtn.style.display = 'none';
-        stopBtn.style.display = 'none';
-        statusDiv.textContent = 'متوقف';
-    }
 
-    // عكس الصورة (للتبديل بين الكاميرا الأمامية/الخلفية إذا كانت معكوسة)
-    function toggleMirror() {
-        mirrored = !mirrored;
-        video.style.transform = mirrored ? 'scaleX(-1)' : 'scaleX(1)';
-        mirrorBtn.textContent = mirrored ? '🔃 إلغاء العكس' : '🔄 اعكس الصورة';
-    }
+        // عكس/تدوير الصورة (للكاميرا الأمامية أو إذا كانت معكوسة)
+        function toggleMirror() {
+            mirrored = !mirrored;
+            video.style.transform = mirrored ? 'scaleX(-1)' : 'scaleX(1)';
+            mirrorBtn.textContent = mirrored ? '🔃 إلغاء العكس' : '🔄 اعكس الصورة';
+        }
 
-    // التقاط إطار وتحليله
-    async function captureAndDecode() {
-        if (!stream || video.readyState < 2) {
-            alert('الكاميرا غير جاهزة');
-            return;
-        }
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        // إذا كانت الصورة معكوسة، اعكس الرسم
-        if (mirrored) {
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
-        }
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        statusDiv.textContent = 'جارٍ التحليل...';
-        const result = await scanImage(canvas);
-        if (result) {
-            resultDiv.textContent = result;
-            statusDiv.textContent = '✅ تم الاكتشاف!';
-        } else {
-            // محاولة بدون عكس الصورة (في حالة كان الانعكاس هو السبب)
+        // التقاط إطار وتحليله
+        async function captureAndDecode() {
+            if (!stream || video.readyState < 2) {
+                alert('الكاميرا غير جاهزة');
+                return;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // رسم الإطار (مع مراعاة الانعكاس إن وجد)
             if (mirrored) {
-                // إعادة الرسم بدون عكس
-                ctx.setTransform(1, 0, 0, 1, 0, 0); // إعادة التعيين
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const result2 = await scanImage(canvas);
-                if (result2) {
-                    resultDiv.textContent = result2;
-                    statusDiv.textContent = '✅ تم الاكتشاف (بدون عكس)!';
-                    return;
-                }
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
             }
-            resultDiv.textContent = 'لم يتم العثور على PDF417. تأكد من وضوح الباركود وإضاءة جيدة.';
-            statusDiv.textContent = 'فشل التحليل';
-        }
-    }
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // إعادة التعيين للقياسات الطبيعية تحسبًا لأي استخدام لاحق
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // تحليل صورة مرفوعة
-    async function handleFileUpload(file) {
-        if (!file) return;
-        statusDiv.textContent = 'جارٍ تحليل الصورة...';
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = async () => {
-            const result = await scanImage(img);
+            statusDiv.textContent = 'جارٍ تحليل اللقطة...';
+            const result = await decodeFromImage(canvas);
             if (result) {
                 resultDiv.textContent = result;
-                statusDiv.textContent = '✅ تم الاكتشاف من الصورة!';
+                statusDiv.textContent = '✅ تم الاكتشاف بنجاح!';
             } else {
-                resultDiv.textContent = 'لم يتم العثور على PDF417 في الصورة.';
+                resultDiv.textContent = 'لم يتم العثور على PDF417. تأكد من وضوح الباركود وإضاءة جيدة.';
                 statusDiv.textContent = 'فشل التحليل';
             }
-        };
-    }
+        }
 
-    // الأحداث
-    startBtn.addEventListener('click', startCamera);
-    stopBtn.addEventListener('click', stopCamera);
-    snapBtn.addEventListener('click', captureAndDecode);
-    mirrorBtn.addEventListener('click', toggleMirror);
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files[0]) handleFileUpload(e.target.files[0]);
-    });
+        // تحليل صورة مرفوعة
+        async function handleFileUpload(file) {
+            if (!file) return;
+            statusDiv.textContent = 'جارٍ تحليل الصورة...';
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+            img.onload = async () => {
+                const result = await decodeFromImage(img);
+                if (result) {
+                    resultDiv.textContent = result;
+                    statusDiv.textContent = '✅ تم الاكتشاف من الصورة!';
+                } else {
+                    resultDiv.textContent = 'لم يتم العثور على PDF417 في الصورة.';
+                    statusDiv.textContent = 'فشل التحليل';
+                }
+            };
+        }
 
-    window.addEventListener('beforeunload', stopCamera);
-</script>
+        // ربط الأحداث
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
+        snapBtn.addEventListener('click', captureAndDecode);
+        mirrorBtn.addEventListener('click', toggleMirror);
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) handleFileUpload(e.target.files[0]);
+        });
+
+        window.addEventListener('beforeunload', stopCamera);
+    </script>
 </body>
-    </html>
+                </html>
