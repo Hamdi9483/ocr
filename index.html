@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ماسح باركود PDF417</title>
-    <!-- مكتبة ZXing للتعامل مع الباركود -->
+    <title>ماسح PDF417 - علاج الحول والتدوير</title>
     <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,16 +20,40 @@
         .container {
             background: #16213e;
             border-radius: 20px;
-            padding: 25px;
+            padding: 20px;
             max-width: 500px;
             width: 100%;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        h1 {
+        h1 { text-align: center; color: #e94560; margin-bottom: 15px; font-size: 1.6rem; }
+        .camera-selector {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+        select, button, .file-label {
+            background: #0f3460;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            flex: 1 1 auto;
             text-align: center;
-            margin-bottom: 20px;
-            color: #e94560;
-            font-size: 1.8rem;
+        }
+        .rotation-controls {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+        .rotation-controls button {
+            flex: 0 0 auto;
+            padding: 8px 12px;
+            background: #533483;
         }
         .video-container {
             position: relative;
@@ -38,130 +61,178 @@
             background: #000;
             border-radius: 15px;
             overflow: hidden;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            aspect-ratio: 16/9;
         }
         video {
             width: 100%;
-            height: auto;
-            display: block;
-            transform: scaleX(-1); /* عكس الكاميرا الأمامية لتكون كالمرآة */
+            height: 100%;
+            object-fit: contain; /* يحافظ على النسب ويمنع التشوه */
+            transition: transform 0.3s;
+        }
+        .scan-frame {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid #e94560;
+            width: 80%;
+            height: 40%;
+            border-radius: 10px;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(233,69,96,0.5);
         }
         .controls {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        button, .file-label {
-            flex: 1 1 auto;
-            background: #0f3460;
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 10px;
-            font-size: 1rem;
-            cursor: pointer;
-            text-align: center;
-            transition: background 0.3s;
-        }
-        button:hover, .file-label:hover {
-            background: #e94560;
+            gap: 8px;
+            margin-bottom: 15px;
         }
         #stopBtn { display: none; }
         #fileInput { display: none; }
-        .file-label {
-            background: #0f3460;
-            display: inline-block;
-        }
         .result-box {
             background: #0f3460;
             border-radius: 10px;
-            padding: 15px;
-            min-height: 60px;
+            padding: 12px;
+            min-height: 50px;
             word-break: break-all;
-            margin-bottom: 15px;
             font-family: monospace;
-            font-size: 1rem;
-            text-align: center;
-            color: #f5f5f5;
-        }
-        .note {
-            font-size: 0.8rem;
-            color: #aaa;
             text-align: center;
         }
+        .note { font-size: 0.8rem; color: #aaa; text-align: center; margin-top: 8px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📷 ماسح PDF417</h1>
 
-        <div class="video-container">
-            <video id="video" autoplay playsinline></video>
+        <!-- اختيار الكاميرا -->
+        <div class="camera-selector">
+            <label for="cameraSelect" style="color:#ccc;">الكاميرا:</label>
+            <select id="cameraSelect" style="flex:2;">
+                <option value="">جاري البحث...</option>
+            </select>
+            <button id="refreshCameras" title="تحديث قائمة الكاميرات">🔄</button>
         </div>
 
+        <!-- أزرار التدوير لعلاج الحول -->
+        <div class="rotation-controls">
+            <button onclick="rotateVideo(0)">0°</button>
+            <button onclick="rotateVideo(90)">90°</button>
+            <button onclick="rotateVideo(180)">180°</button>
+            <button onclick="rotateVideo(270)">270°</button>
+        </div>
+
+        <!-- عرض الفيديو -->
+        <div class="video-container" id="videoContainer">
+            <video id="video" autoplay playsinline muted></video>
+            <div class="scan-frame"></div>
+        </div>
+
+        <!-- أزرار التحكم -->
         <div class="controls">
-            <button id="startBtn">📸 فتح الكاميرا</button>
+            <button id="startBtn">📸 بدء المسح</button>
             <button id="stopBtn">⏹️ إيقاف</button>
             <label for="fileInput" class="file-label">📁 رفع صورة</label>
             <input type="file" id="fileInput" accept="image/*">
         </div>
 
+        <!-- النتيجة -->
         <div class="result-box" id="result">النتيجة ستظهر هنا...</div>
-        <div class="note">
-            يعمل على HTTPS أو localhost فقط لتفعيل الكاميرا.
-        </div>
+        <div class="note">وجّه الباركود داخل الإطار. إذا كانت الصورة مقلوبة أو جانبية استخدم أزرار التدوير.</div>
     </div>
 
     <script>
-        // العناصر
         const video = document.getElementById('video');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const fileInput = document.getElementById('fileInput');
         const resultDiv = document.getElementById('result');
+        const cameraSelect = document.getElementById('cameraSelect');
+        const refreshCamerasBtn = document.getElementById('refreshCameras');
+        const videoContainer = document.getElementById('videoContainer');
 
-        // إعداد قارئ ZXing مع تحديد PDF417 فقط
+        // إعداد ZXing لـ PDF417 فقط مع المحاولة الجادة
         const hints = new Map();
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
         const reader = new ZXing.BrowserMultiFormatReader(hints);
 
-        let selectedDeviceId = null;
+        let currentRotation = 0;
 
-        // دالة بدء المسح من الكاميرا
-        async function startScanning() {
-            try {
-                // الحصول على قائمة الكاميرات واختيار الخلفية إن وُجدت
-                const devices = await reader.listVideoInputDevices();
-                if (devices.length === 0) {
-                    alert('لم يتم العثور على كاميرا.');
-                    return;
-                }
-                // تفضيل الكاميرا الخلفية (environment)
-                const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
-                selectedDeviceId = backCamera ? backCamera.deviceId : devices[0].deviceId;
-
-                // بدء فك التشفير المستمر
-                reader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
-                    if (result) {
-                        resultDiv.textContent = result.getText();
-                        // يمكن إيقاف المسح بعد أول قراءة ناجحة
-                        // stopScanning(); 
-                    }
-                    if (err && !(err instanceof ZXing.NotFoundException)) {
-                        // أخطاء غير "لم يتم العثور" قد تكون مفيدة
-                        console.error(err);
-                    }
-                });
-
-                startBtn.style.display = 'none';
-                stopBtn.style.display = 'inline-block';
-            } catch (error) {
-                alert('خطأ في الوصول للكاميرا: ' + error.message);
+        // دالة تدوير الفيديو بصرياً
+        function rotateVideo(degrees) {
+            currentRotation = degrees;
+            video.style.transform = `rotate(${degrees}deg)`;
+            // نضبط حجم الحاوية حسب التدوير للحفاظ على المظهر
+            if (degrees === 90 || degrees === 270) {
+                videoContainer.style.aspectRatio = '9/16'; // عمودي
+            } else {
+                videoContainer.style.aspectRatio = '16/9'; // أفقي
             }
         }
 
-        // إيقاف الكاميرا
+        // ملء قائمة الكاميرات
+        async function populateCameraList() {
+            cameraSelect.innerHTML = '<option value="">جاري البحث...</option>';
+            try {
+                const devices = await reader.listVideoInputDevices();
+                if (devices.length === 0) {
+                    cameraSelect.innerHTML = '<option value="">لا توجد كاميرات</option>';
+                    return;
+                }
+                cameraSelect.innerHTML = '';
+                devices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    const label = device.label || `كاميرا ${index + 1}`;
+                    option.text = label;
+                    // تمييز الكاميرا الخلفية
+                    if (label.toLowerCase().includes('back') || label.toLowerCase().includes('environment')) {
+                        option.text += ' (خلفية)';
+                    }
+                    cameraSelect.appendChild(option);
+                });
+                // اختيار أول كاميرا افتراضياً (أو الخلفية إن وُجدت)
+                const backCam = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
+                cameraSelect.value = backCam ? backCam.deviceId : devices[0].deviceId;
+            } catch (e) {
+                cameraSelect.innerHTML = '<option value="">خطأ في الوصول للكاميرات</option>';
+                console.error(e);
+            }
+        }
+
+        // بدء المسح بالكاميرا مع دقة عالية
+        async function startScanning() {
+            const deviceId = cameraSelect.value;
+            if (!deviceId) {
+                alert('الرجاء اختيار كاميرا من القائمة.');
+                return;
+            }
+            try {
+                await reader.decodeFromVideoDevice(deviceId, video, (result, err) => {
+                    if (result) {
+                        resultDiv.textContent = result.getText();
+                        // اختياري: إيقاف بعد أول قراءة
+                        // stopScanning();
+                    }
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error(err);
+                    }
+                }, {
+                    video: {
+                        deviceId: { exact: deviceId },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        facingMode: 'environment' // تلميح للخلفية
+                    }
+                });
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+            } catch (error) {
+                alert('تعذر بدء الكاميرا: ' + error.message);
+            }
+        }
+
         function stopScanning() {
             reader.reset();
             video.srcObject = null;
@@ -169,35 +240,51 @@
             stopBtn.style.display = 'none';
         }
 
-        // فك ترميز صورة مرفوعة
+        // فك ترميز الصورة المرفوعة
         function decodeImage(file) {
             if (!file) return;
             const img = new Image();
             img.src = URL.createObjectURL(file);
             img.onload = () => {
                 reader.decodeFromImageElement(img)
-                    .then(result => {
-                        resultDiv.textContent = result.getText();
-                    })
+                    .then(result => resultDiv.textContent = result.getText())
                     .catch(err => {
-                        resultDiv.textContent = 'لم يتم العثور على باركود PDF417 في الصورة.';
+                        resultDiv.textContent = 'لم يتم العثور على PDF417 في الصورة.';
                         console.error(err);
                     });
             };
         }
 
-        // ربط الأحداث
+        // معالجة الأحداث
         startBtn.addEventListener('click', startScanning);
         stopBtn.addEventListener('click', stopScanning);
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                decodeImage(e.target.files[0]);
+            if (e.target.files.length > 0) decodeImage(e.target.files[0]);
+        });
+        refreshCamerasBtn.addEventListener('click', populateCameraList);
+
+        // تحديث الكاميرا عند التغيير (مع إعادة التشغيل إذا كان يعمل)
+        cameraSelect.addEventListener('change', () => {
+            if (startBtn.style.display === 'none') { // يعني الكاميرا شغالة
+                stopScanning();
+                startScanning();
             }
         });
 
-        // تنظيف عند مغادرة الصفحة
-        window.addEventListener('beforeunload', () => {
-            reader.reset();
+        // تحميل قائمة الكاميرات عند فتح الصفحة
+        window.addEventListener('load', populateCameraList);
+        // تنظيف
+        window.addEventListener('beforeunload', () => reader.reset());
+
+        // إفلات الصور
+        const dropZone = document.querySelector('.container');
+        dropZone.addEventListener('dragover', e => e.preventDefault());
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                decodeImage(file);
+            }
         });
     </script>
 </body>
