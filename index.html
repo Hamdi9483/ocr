@@ -1,108 +1,118 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>قارئ باركود PDF417</title>
+    <title>ماسح باركود الهويات والمستندات</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f9; padding: 20px; }
-        #video-container { position: relative; width: 100%; max-width: 500px; margin: auto; border: 4px solid #333; border-radius: 8px; overflow: hidden; background: #000; }
-        video { width: 100%; height: auto; display: block; }
-        #scanner-laser { position: absolute; top: 50%; left: 5%; width: 90%; height: 2px; background: red; box-shadow: 0 0 8px red; animation: laserMove 2s infinite ease-in-out; }
-        @keyframes laserMove { 0%, 100% { top: 20%; } 50% { top: 80%; } }
-        button { padding: 12px 24px; font-size: 16px; background: #28a745; color: #fff; border: none; border-radius: 5px; cursor: pointer; margin-top: 15px; }
-        #result-box { margin-top: 20px; padding: 15px; background: #fff; border: 1px solid #ccc; border-radius: 5px; max-width: 500px; margin-left: auto; margin-right: auto; word-break: break-all; }
-        #error-msg { color: white; background: red; padding: 10px; border-radius: 5px; margin-top: 10px; display: none; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #f0f2f5; padding: 15px; margin: 0; }
+        h2 { color: #333; margin-bottom: 5px; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; background: #000; margin-top: 15px; }
+        button { width: 100%; padding: 14px; font-size: 16px; font-weight: bold; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        button:hover { background: #0056b3; }
+        #stop-btn { background: #dc3545; display: none; }
+        #stop-btn:hover { background: #bd2130; }
+        #result-box { margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 8px; text-align: right; word-break: break-all; border-right: 5px solid #28a745; }
+        #error-log { color: #721c24; background-color: #f8d7da; padding: 10px; border-radius: 8px; margin-top: 15px; font-size: 14px; text-align: center; display: none; }
     </style>
     
-    <!-- تحديث رابط المكتبة إلى سيرفر cndjs العالمي والأكثر استقراراً -->
-    <script src="https://cloudflare.com" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- استخدام سيرفر البديل المستقر والمدعوم عالمياً بدون حجب -->
+    <script src="https://unpkg.com" type="text/javascript"></script>
 </head>
 <body>
 
-    <h2>ماسح باركود الهويات (PDF417)</h2>
-    <p>قم بتوجيه الباركود نحو الكاميرا بعد تشغيلها</p>
+<div class="container">
+    <h2>قارئ باركود PDF417 السوري</h2>
+    <p style="color: #666; font-size: 14px;">اضغط على تشغيل لتفعيل الكاميرا والمسح التلقائي</p>
 
-    <div id="video-container">
-        <video id="video" autoplay playsinline muted></video>
-        <div id="scanner-laser"></div>
-    </div>
+    <!-- مكان عرض الكاميرا -->
+    <div id="reader"></div>
 
-    <button id="start-btn">تشغيل الكاميرا والمسح</button>
-    <div id="error-msg"></div>
-    
+    <button id="start-btn">تشغيل الكاميرا وبدء المسح</button>
+    <button id="stop-btn">إيقاف الكاميرا</button>
+
+    <div id="error-log"></div>
+
     <div id="result-box">
-        <strong>البيانات المستخرجة:</strong>
-        <p id="result">في انتظار بدء المسح...</p>
+        <strong>البيانات المستخرجة للبطاقة:</strong>
+        <p id="result-text" style="color: #333; font-family: monospace; margin-top: 8px;">في انتظار مسح الكود...</p>
     </div>
+</div>
 
-    <script>
-        const videoElement = document.getElementById('video');
-        const startBtn = document.getElementById('start-btn');
-        const resultText = document.getElementById('result');
-        const errorMsg = document.getElementById('error-msg');
-        let isScanning = false;
-        let codeReader = null;
+<script>
+    let html5QrCode = null;
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const resultText = document.getElementById('result-text');
+    const errorLog = document.getElementById('error-log');
 
-        startBtn.addEventListener('click', async () => {
-            if (isScanning) {
-                if(codeReader) codeReader.reset();
-                if(videoElement.srcObject) {
-                    videoElement.srcObject.getTracks().forEach(track => track.stop());
+    startBtn.addEventListener('click', async () => {
+        errorLog.style.display = 'none';
+        resultText.innerText = "جاري تشغيل الكاميرا...";
+
+        // التأكد من تحميل المكتبة داخلياً
+        if (typeof Html5Qrcode === 'undefined') {
+            errorLog.style.display = 'block';
+            errorLog.innerText = "خطأ: فشل اتصال المتصفح بمحرك فك التشفير. يرجى إعادة تحديث الصفحة.";
+            return;
+        }
+
+        try {
+            // تهيئة الماسح داخل العنصر المخصص
+            html5QrCode = new Html5Qrcode("reader");
+
+            // إعدادات المسح (تحديد صيغة PDF417 فقط لتسريع القراءة الفورية للهويات)
+            const config = {
+                fps: 15,
+                qrbox: (width, height) => {
+                    return { width: width * 0.8, height: height * 0.5 }; // مستطيل عريض مناسب لشكل الباركود في الهوية
+                },
+                formatsToSupport: [ Html5QrcodeSupportedFormats.PDF_417 ]
+            };
+
+            // تشغيل الكاميرا الخلفية تلقائياً وبدء المسح المباشر
+            await html5QrCode.start(
+                { facingMode: "environment" }, 
+                config,
+                (decodedText, decodedResult) => {
+                    // في حال النجاح في القراءة
+                    resultText.innerHTML = `<span style="color:#28a745; font-weight:bold; font-size:16px;">${decodedText}</span>`;
+                    if (navigator.vibrate) navigator.vibrate(200); // اهتزاز الهاتف تنبيهاً بالنجاح
+                },
+                (errorMessage) => {
+                    // تجاهل أخطاء البحث عن الكود المستمرة أثناء حركة الكاميرا العادية
                 }
-                resultText.innerText = "تم إيقاف المسح.";
-                startBtn.innerText = "تشغيل الكاميرا والمسح";
-                startBtn.style.background = "#28a745";
-                isScanning = false;
-                errorMsg.style.display = "none";
-            } else {
-                resultText.innerText = "جاري تهيئة الكاميرا وفحص المكتبة...";
-                errorMsg.style.display = "none";
+            );
 
-                // التحقق الفوري من أن المكتبة تم تحميلها بنجاح في المتصفح
-                if (typeof ZXing === 'undefined') {
-                    errorMsg.style.display = "block";
-                    errorMsg.innerText = "فشل تحميل مكتبة قارئ الباركود من الإنترنت. يرجى تحديث الصفحة أو التحقق من اتصال الشبكة.";
-                    return;
-                }
+            // تبديل الأزرار عند نجاح فتح الكاميرا
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+            resultText.innerText = "وجه الكاميرا الآن بشكل مستقيم ومستقر نحو الباركود الخلفي للهوية...";
 
-                try {
-                    // طلب تفعيل الكاميرا الخلفية أولاً للهواتف
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: { ideal: "environment" } } 
-                    }).catch(async () => {
-                        // حل بديل في حال عدم وجود كاميرا خلفية (مثل لابتوب)
-                        return await navigator.mediaDevices.getUserMedia({ video: true });
-                    });
+        } catch (err) {
+            console.error(err);
+            errorLog.style.display = 'block';
+            errorLog.innerText = `تعذر تشغيل الكاميرا. السبب: ${err}. يرجى التحقق من منح الإذن للمتصفح عبر النقر على علامة القفل بجانب الرابط.`;
+            resultText.innerText = "فشل بدء المسح.";
+        }
+    });
 
-                    videoElement.srcObject = stream;
-
-                    // تهيئة دقيقة للمكتبة لقراءة كود PDF417 المخصص للهويات
-                    const hints = new Map();
-                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
-                    codeReader = new ZXing.BrowserMultiFormatReader(hints);
-
-                    codeReader.decodeFromStream(stream, videoElement, (result, err) => {
-                        if (result) {
-                            // إظهار النتيجة بنجاح عند فك تشفير الكود
-                            resultText.innerHTML = `<span style="color:green; font-weight:bold; font-size: 18px;">${result.text}</span>`;
-                            if (navigator.vibrate) navigator.vibrate(200); // اهتزاز للتنبيه
-                        }
-                    });
-
-                    startBtn.innerText = "إيقاف الكاميرا";
-                    startBtn.style.background = "#dc3545";
-                    isScanning = true;
-                    resultText.innerText = "وجه الكاميرا الآن بدقة وثبات نحو كود الـ PDF417...";
-
-                } catch (error) {
-                    console.error(error);
-                    errorMsg.style.display = "block";
-                    errorMsg.innerText = `حدث خطأ أثناء تشغيل الكاميرا: ${error.message}`;
-                }
+    // دالة إيقاف الكاميرا بأمان
+    stopBtn.addEventListener('click', async () => {
+        if (html5QrCode) {
+            try {
+                await html5QrCode.stop();
+                startBtn.style.display = 'block';
+                stopBtn.style.display = 'none';
+                resultText.innerText = "تم إيقاف الكاميرا.";
+                errorLog.style.display = 'none';
+            } catch (err) {
+                console.error("Failed to stop", err);
             }
-        });
-    </script>
+        }
+    });
+</script>
+
 </body>
 </html>
-                 
