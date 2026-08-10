@@ -1,180 +1,44 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>قارئ PDF417 الموثوق</title>
-  
-  <!-- مكتبة ZXing -->
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
-
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, sans-serif;
-    }
-
-    body {
-      background-color: #0f172a;
-      color: #f8fafc;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    .card {
-      background: #1e293b;
-      padding: 30px 20px;
-      border-radius: 16px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-      width: 100%;
-      max-width: 450px;
-      text-align: center;
-      border: 1px solid #334155;
-    }
-
-    h2 {
-      font-size: 1.3rem;
-      margin-bottom: 12px;
-      color: #38bdf8;
-    }
-
-    p {
-      font-size: 0.9rem;
-      color: #94a3b8;
-      margin-bottom: 25px;
-      line-height: 1.5;
-    }
-
-    /* إخفاء عنصر المكون الاصلي واستبداله بزر أنيق */
-    input[type="file"] {
-      display: none;
-    }
-
-    .btn-capture {
-      display: inline-block;
-      width: 100%;
-      background: #0284c7;
-      color: #ffffff;
-      padding: 16px;
-      border-radius: 10px;
-      font-size: 1.1rem;
-      font-weight: bold;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
-    }
-
-    .btn-capture:active {
-      transform: scale(0.98);
-      background: #0369a1;
-    }
-
-    .preview-container {
-      margin-top: 20px;
-      display: none;
-    }
-
-    .preview-container img {
-      max-width: 100%;
-      max-height: 200px;
-      border-radius: 8px;
-      border: 1px solid #475569;
-    }
-
-    .result-box {
-      margin-top: 25px;
-      background: #0f172a;
-      padding: 15px;
-      border-radius: 8px;
-      text-align: right;
-      border-right: 4px solid #38bdf8;
-      min-height: 60px;
-    }
-
-    .result-title {
-      font-size: 0.8rem;
-      color: #64748b;
-      margin-bottom: 5px;
-    }
-
-    #resultText {
-      font-family: monospace;
-      font-size: 0.95rem;
-      color: #4ade80;
-      word-break: break-all;
-    }
-
-    .loading {
-      color: #fbbf24;
-    }
-  </style>
+  <title>تجربة محرك Dynamsoft</title>
+  <!-- استدعاء محرك WebAssembly -->
+  <script src="https://cdn.jsdelivr.net/npm/dynamsoft-javascript-barcode@9.6.20/dist/dbr.js"></script>
 </head>
 <body>
-
-  <div class="card">
-    <h2>مسح باركود PDF417</h2>
-    <p>اضغط أدناه لالتقاط صورة للباركود باستخدام كاميرا الجوال مباشرة وبدقة عالية</p>
-
-    <!-- التقاط مباشر عبر كاميرا الجوال الأساسية -->
-    <label for="cameraInput" class="btn-capture">
-      📷 التقاط صورة الباركود
-    </label>
-    <input type="file" id="cameraInput" accept="image/*" capture="environment">
-
-    <div class="preview-container" id="previewContainer">
-      <img id="imagePreview" alt="معاينة الصورة">
-    </div>
-
-    <div class="result-box">
-      <div class="result-title">النتيجة المستخرجة:</div>
-      <div id="resultText">في انتظار التقط الصورة...</div>
-    </div>
-  </div>
+  <h2>تجربة فك تشفير PDF417 عبر محرك C++ WebAssembly</h2>
+  <input type="file" id="fileInput" accept="image/*">
+  <pre id="output">اختر صورة الباركود...</pre>
 
   <script>
-    const codeReader = new ZXing.BrowserPDF417Reader();
-    const cameraInput = document.getElementById('cameraInput');
-    const resultText = document.getElementById('resultText');
-    const imagePreview = document.getElementById('imagePreview');
-    const previewContainer = document.getElementById('previewContainer');
+    // تهيئة الترخيص التجريبي المجاني المدمج
+    Dynamsoft.DBR.BarcodeReader.license = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk0MiIsIm9yZ2FuaXphdGlvbklEIjoiMjAwMDAxIn0=';
 
-    cameraInput.addEventListener('change', async (event) => {
-      const file = event.target.files[0];
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
       if (!file) return;
 
-      // إظهار حالة المعالجة ورسم معاينة الصورة
-      resultText.className = 'loading';
-      resultText.textContent = 'جاري تحليل الصورة وفك التشفير...';
+      document.getElementById('output').textContent = "جاري التحليل بالمحرك المتقدم...";
       
-      const imageUrl = URL.createObjectURL(file);
-      imagePreview.src = imageUrl;
-      previewContainer.style.display = 'block';
+      try {
+        const reader = await Dynamsoft.DBR.BarcodeReader.createInstance();
+        // ضبط الإعدادات للتركيز على PDF417 فقط
+        let settings = await reader.getRuntimeSettings();
+        settings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
+        await reader.updateRuntimeSettings(settings);
 
-      imagePreview.onload = async () => {
-        try {
-          // فك تشفير الباركود من عنصر الصورة مباشرة
-          const result = await codeReader.decodeFromImageElement(imagePreview);
-          
-          resultText.className = '';
-          resultText.textContent = result.getText();
-          
-          // إهتزاز خفيف لتأكيد النجاح
-          if (navigator.vibrate) navigator.vibrate(200);
-
-        } catch (error) {
-          console.error(error);
-          resultText.className = '';
-          resultText.style.color = '#f87171';
-          resultText.textContent = 'تعذر التعرف على الباركود! يرجى إعادة الالتقاط بحيث يكون الباركود واضحاً وبدون إضاءة عاكسة عليه.';
+        const results = await reader.decode(file);
+        
+        if (results.length > 0) {
+          document.getElementById('output').textContent = "تمت القراءة بنجاح:\n" + results[0].barcodeText;
+        } else {
+          document.getElementById('output').textContent = "لم يتم العثور على رمز PDF417 في الصورة.";
         }
-      };
+      } catch (err) {
+        document.getElementById('output').textContent = "خطأ: " + err.message;
+      }
     });
   </script>
-
 </body>
 </html>
