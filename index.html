@@ -3,289 +3,373 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ماسح PDF417 - علاج الحول والتدوير</title>
+    <title>ماسح باركود - حل نهائي</title>
     <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Tahoma, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
-            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #111;
+            color: #fff;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            min-height: 100vh;
+            padding: 15px;
         }
         .container {
-            background: #16213e;
+            background: #1e1e2f;
             border-radius: 20px;
             padding: 20px;
-            max-width: 500px;
+            max-width: 550px;
             width: 100%;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
         }
-        h1 { text-align: center; color: #e94560; margin-bottom: 15px; font-size: 1.6rem; }
-        .camera-selector {
+        h2 { text-align: center; color: #ff6b6b; margin-bottom: 15px; }
+        .controls-panel {
             display: flex;
-            gap: 5px;
-            margin-bottom: 10px;
-            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
             align-items: center;
         }
-        select, button, .file-label {
-            background: #0f3460;
+        select, button, .btn {
+            background: #2a2a4a;
             color: white;
             border: none;
-            padding: 10px;
+            padding: 10px 12px;
             border-radius: 8px;
-            font-size: 0.9rem;
             cursor: pointer;
+            font-size: 0.9rem;
             flex: 1 1 auto;
             text-align: center;
+            transition: 0.2s;
         }
-        .rotation-controls {
-            display: flex;
-            gap: 5px;
-            margin-bottom: 15px;
-            justify-content: center;
-        }
-        .rotation-controls button {
-            flex: 0 0 auto;
-            padding: 8px 12px;
-            background: #533483;
-        }
-        .video-container {
+        select { flex: 2; }
+        button:hover, .btn:hover { background: #ff6b6b; }
+        .video-wrapper {
             position: relative;
-            width: 100%;
             background: #000;
-            border-radius: 15px;
+            border-radius: 12px;
             overflow: hidden;
             margin-bottom: 15px;
-            aspect-ratio: 16/9;
+            aspect-ratio: 16 / 9;
         }
         video {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* يحافظ على النسب ويمنع التشوه */
+            object-fit: contain;
             transition: transform 0.3s;
         }
         .scan-frame {
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            border: 2px solid #e94560;
-            width: 80%;
-            height: 40%;
-            border-radius: 10px;
+            border: 2px solid #ff6b6b;
+            width: 80%; height: 50%;
+            border-radius: 12px;
             pointer-events: none;
-            box-shadow: 0 0 10px rgba(233,69,96,0.5);
+            box-shadow: 0 0 12px rgba(255,107,107,0.5);
         }
-        .controls {
+        .action-row {
             display: flex;
+            gap: 10px;
+            margin: 10px 0;
             flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 15px;
         }
-        #stopBtn { display: none; }
-        #fileInput { display: none; }
         .result-box {
-            background: #0f3460;
+            background: #2a2a4a;
             border-radius: 10px;
-            padding: 12px;
-            min-height: 50px;
+            padding: 15px;
+            min-height: 60px;
             word-break: break-all;
             font-family: monospace;
             text-align: center;
+            margin-top: 10px;
+            font-size: 1rem;
+            border: 1px solid #444;
         }
-        .note { font-size: 0.8rem; color: #aaa; text-align: center; margin-top: 8px; }
+        .mode-btns {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+        .mode-btns button {
+            flex: 1;
+            background: #333;
+        }
+        .mode-btns button.active {
+            background: #ff6b6b;
+            font-weight: bold;
+        }
+        canvas { display: none; }
+        .note { font-size: 0.75rem; color: #aaa; text-align: center; margin-top: 8px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📷 ماسح PDF417</h1>
+<div class="container">
+    <h2>📷 ماسح الباركود (PDF417)</h2>
 
-        <!-- اختيار الكاميرا -->
-        <div class="camera-selector">
-            <label for="cameraSelect" style="color:#ccc;">الكاميرا:</label>
-            <select id="cameraSelect" style="flex:2;">
-                <option value="">جاري البحث...</option>
-            </select>
-            <button id="refreshCameras" title="تحديث قائمة الكاميرات">🔄</button>
-        </div>
-
-        <!-- أزرار التدوير لعلاج الحول -->
-        <div class="rotation-controls">
-            <button onclick="rotateVideo(0)">0°</button>
-            <button onclick="rotateVideo(90)">90°</button>
-            <button onclick="rotateVideo(180)">180°</button>
-            <button onclick="rotateVideo(270)">270°</button>
-        </div>
-
-        <!-- عرض الفيديو -->
-        <div class="video-container" id="videoContainer">
-            <video id="video" autoplay playsinline muted></video>
-            <div class="scan-frame"></div>
-        </div>
-
-        <!-- أزرار التحكم -->
-        <div class="controls">
-            <button id="startBtn">📸 بدء المسح</button>
-            <button id="stopBtn">⏹️ إيقاف</button>
-            <label for="fileInput" class="file-label">📁 رفع صورة</label>
-            <input type="file" id="fileInput" accept="image/*">
-        </div>
-
-        <!-- النتيجة -->
-        <div class="result-box" id="result">النتيجة ستظهر هنا...</div>
-        <div class="note">وجّه الباركود داخل الإطار. إذا كانت الصورة مقلوبة أو جانبية استخدم أزرار التدوير.</div>
+    <!-- اختيار نوع المسح -->
+    <div class="mode-btns">
+        <button id="modeAll" class="active">كل الأنواع</button>
+        <button id="modePdf417">PDF417 فقط</button>
     </div>
 
-    <script>
+    <!-- اختيار الكاميرا -->
+    <div class="controls-panel">
+        <select id="cameraSelect"><option>جاري البحث عن كاميرات...</option></select>
+        <button id="refreshBtn" title="تحديث قائمة الكاميرات">🔄</button>
+    </div>
+
+    <!-- أزرار التدوير -->
+    <div class="controls-panel" style="justify-content: center;">
+        <button onclick="setRotation(0)">0°</button>
+        <button onclick="setRotation(90)">90°</button>
+        <button onclick="setRotation(180)">180°</button>
+        <button onclick="setRotation(270)">270°</button>
+    </div>
+
+    <!-- الفيديو -->
+    <div class="video-wrapper" id="videoWrapper">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="scan-frame"></div>
+    </div>
+
+    <!-- أزرار التحكم -->
+    <div class="action-row">
+        <button id="startBtn">▶️ بدء الكاميرا</button>
+        <button id="snapBtn" style="display:none;">📸 التقط وحلل</button>
+        <button id="stopBtn" style="display:none;">⏹️ إيقاف</button>
+        <label for="fileInput" class="btn" style="flex:1;">📁 اختر صورة</label>
+        <input type="file" id="fileInput" accept="image/*" hidden>
+    </div>
+
+    <!-- النتيجة -->
+    <div class="result-box" id="result">لم يتم اكتشاف باركود بعد</div>
+    <div class="note">وجّه الباركود داخل الإطار ثم اضغط "التقط وحلل" أو انتظر القراءة المباشرة.</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+    (function() {
+        // ----- العناصر -----
         const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const resultBox = document.getElementById('result');
         const startBtn = document.getElementById('startBtn');
+        const snapBtn = document.getElementById('snapBtn');
         const stopBtn = document.getElementById('stopBtn');
         const fileInput = document.getElementById('fileInput');
-        const resultDiv = document.getElementById('result');
         const cameraSelect = document.getElementById('cameraSelect');
-        const refreshCamerasBtn = document.getElementById('refreshCameras');
-        const videoContainer = document.getElementById('videoContainer');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const modeAllBtn = document.getElementById('modeAll');
+        const modePdf417Btn = document.getElementById('modePdf417');
+        const videoWrapper = document.getElementById('videoWrapper');
 
-        // إعداد ZXing لـ PDF417 فقط مع المحاولة الجادة
-        const hints = new Map();
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        const reader = new ZXing.BrowserMultiFormatReader(hints);
-
+        let currentStream = null;
         let currentRotation = 0;
+        let scanningActive = false;
+        let scanInterval = null;
+        let currentMode = 'all'; // 'all' أو 'pdf417'
 
-        // دالة تدوير الفيديو بصرياً
-        function rotateVideo(degrees) {
-            currentRotation = degrees;
-            video.style.transform = `rotate(${degrees}deg)`;
-            // نضبط حجم الحاوية حسب التدوير للحفاظ على المظهر
-            if (degrees === 90 || degrees === 270) {
-                videoContainer.style.aspectRatio = '9/16'; // عمودي
-            } else {
-                videoContainer.style.aspectRatio = '16/9'; // أفقي
+        // ----- إعداد ZXing -----
+        const reader = new ZXing.BrowserMultiFormatReader();
+        function getHints() {
+            const hints = new Map();
+            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+            if (currentMode === 'pdf417') {
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
             }
+            return hints;
         }
 
-        // ملء قائمة الكاميرات
-        async function populateCameraList() {
-            cameraSelect.innerHTML = '<option value="">جاري البحث...</option>';
+        // ----- تدوير الفيديو بصرياً -----
+        window.setRotation = (deg) => {
+            currentRotation = deg;
+            video.style.transform = `rotate(${deg}deg)`;
+            if (deg === 90 || deg === 270) {
+                videoWrapper.style.aspectRatio = '9 / 16';
+            } else {
+                videoWrapper.style.aspectRatio = '16 / 9';
+            }
+        };
+
+        // ----- ملء قائمة الكاميرات -----
+        async function populateCameras() {
+            cameraSelect.innerHTML = '<option>جاري البحث...</option>';
             try {
-                const devices = await reader.listVideoInputDevices();
-                if (devices.length === 0) {
-                    cameraSelect.innerHTML = '<option value="">لا توجد كاميرات</option>';
+                const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
+                if (!devices || devices.length === 0) {
+                    cameraSelect.innerHTML = '<option>لا توجد كاميرات</option>';
                     return;
                 }
                 cameraSelect.innerHTML = '';
-                devices.forEach((device, index) => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    const label = device.label || `كاميرا ${index + 1}`;
-                    option.text = label;
-                    // تمييز الكاميرا الخلفية
-                    if (label.toLowerCase().includes('back') || label.toLowerCase().includes('environment')) {
-                        option.text += ' (خلفية)';
-                    }
-                    cameraSelect.appendChild(option);
+                devices.forEach((d, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    let label = d.label || `كاميرا ${i+1}`;
+                    if (label.toLowerCase().includes('back') || label.toLowerCase().includes('environment')) label += ' (خلفية)';
+                    opt.textContent = label;
+                    cameraSelect.appendChild(opt);
                 });
-                // اختيار أول كاميرا افتراضياً (أو الخلفية إن وُجدت)
-                const backCam = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
-                cameraSelect.value = backCam ? backCam.deviceId : devices[0].deviceId;
+                // اختيار الخلفية افتراضياً
+                const back = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
+                cameraSelect.value = back ? back.deviceId : devices[0].deviceId;
             } catch (e) {
-                cameraSelect.innerHTML = '<option value="">خطأ في الوصول للكاميرات</option>';
+                cameraSelect.innerHTML = '<option>خطأ: تعذر الوصول للكاميرات</option>';
                 console.error(e);
             }
         }
 
-        // بدء المسح بالكاميرا مع دقة عالية
-        async function startScanning() {
+        // ----- إيقاف الكاميرا والتنظيف -----
+        function stopCamera() {
+            if (scanInterval) clearInterval(scanInterval);
+            scanningActive = false;
+            if (currentStream) {
+                currentStream.getTracks().forEach(t => t.stop());
+                currentStream = null;
+            }
+            video.srcObject = null;
+            startBtn.style.display = 'inline-block';
+            snapBtn.style.display = 'none';
+            stopBtn.style.display = 'none';
+        }
+
+        // ----- بدء الكاميرا بدقة عالية -----
+        async function startCamera() {
+            stopCamera(); // إيقاف أي جلسة سابقة
             const deviceId = cameraSelect.value;
             if (!deviceId) {
-                alert('الرجاء اختيار كاميرا من القائمة.');
+                alert('الرجاء اختيار كاميرا أولاً.');
                 return;
             }
             try {
-                await reader.decodeFromVideoDevice(deviceId, video, (result, err) => {
-                    if (result) {
-                        resultDiv.textContent = result.getText();
-                        // اختياري: إيقاف بعد أول قراءة
-                        // stopScanning();
-                    }
-                    if (err && !(err instanceof ZXing.NotFoundException)) {
-                        console.error(err);
-                    }
-                }, {
+                const constraints = {
                     video: {
                         deviceId: { exact: deviceId },
                         width: { ideal: 1920 },
                         height: { ideal: 1080 },
-                        facingMode: 'environment' // تلميح للخلفية
+                        facingMode: 'environment'
                     }
-                });
+                };
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+                await video.play();
+
                 startBtn.style.display = 'none';
+                snapBtn.style.display = 'inline-block';
                 stopBtn.style.display = 'inline-block';
-            } catch (error) {
-                alert('تعذر بدء الكاميرا: ' + error.message);
+                scanningActive = true;
+
+                // بدء محاولة القراءة المباشرة (كل 500ms)
+                scanInterval = setInterval(tryScanFromVideo, 500);
+                resultBox.textContent = 'الكاميرا تعمل... وجّه الباركود أو اضغط "التقط وحلل".';
+            } catch (err) {
+                alert('فشل تشغيل الكاميرا: ' + err.message);
+                console.error(err);
+                stopCamera();
             }
         }
 
-        function stopScanning() {
-            reader.reset();
-            video.srcObject = null;
-            startBtn.style.display = 'inline-block';
-            stopBtn.style.display = 'none';
+        // ----- محاولة مسح الإطار الحالي من الفيديو (مباشر) -----
+        function tryScanFromVideo() {
+            if (!scanningActive || video.readyState < 2) return;
+            try {
+                reader.decodeFromVideoElement(video).then(result => {
+                    if (result) {
+                        resultBox.textContent = result.getText();
+                        // يمكن إيقاف المسح بعد أول نجاح
+                        // stopCamera();
+                    }
+                }).catch(err => {
+                    // NotFoundException أمر طبيعي
+                    if (!(err instanceof ZXing.NotFoundException)) {
+                        console.warn(err);
+                    }
+                });
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        // فك ترميز الصورة المرفوعة
-        function decodeImage(file) {
+        // ----- التقاط لقطة من الفيديو وتحليلها (موثوقة جداً) -----
+        function captureAndDecode() {
+            if (!currentStream || video.readyState < 2) {
+                alert('الكاميرا غير جاهزة بعد.');
+                return;
+            }
+            const ctx = canvas.getContext('2d');
+            // ضبط أبعاد الكانفاس لتناسب الفيديو الفعلي
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            resultBox.textContent = 'جارٍ تحليل الصورة...';
+            // استخدام decodeFromImageElement مع الكانفاس (أو يمكن تحويله لصورة)
+            const img = new Image();
+            img.src = canvas.toDataURL('image/png');
+            img.onload = () => {
+                reader.decodeFromImageElement(img, getHints()).then(result => {
+                    resultBox.textContent = result.getText();
+                }).catch(err => {
+                    resultBox.textContent = 'لم يتم العثور على باركود في اللقطة. حاول مرة أخرى مع إضاءة أفضل.';
+                    console.error(err);
+                });
+            };
+        }
+
+        // ----- تحليل صورة مرفوعة -----
+        function decodeUploadedImage(file) {
             if (!file) return;
             const img = new Image();
             img.src = URL.createObjectURL(file);
             img.onload = () => {
-                reader.decodeFromImageElement(img)
-                    .then(result => resultDiv.textContent = result.getText())
-                    .catch(err => {
-                        resultDiv.textContent = 'لم يتم العثور على PDF417 في الصورة.';
-                        console.error(err);
-                    });
+                reader.decodeFromImageElement(img, getHints()).then(result => {
+                    resultBox.textContent = result.getText();
+                }).catch(err => {
+                    resultBox.textContent = 'لم يتم العثور على باركود في الصورة المرفوعة.';
+                    console.error(err);
+                });
             };
         }
 
-        // معالجة الأحداث
-        startBtn.addEventListener('click', startScanning);
-        stopBtn.addEventListener('click', stopScanning);
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) decodeImage(e.target.files[0]);
-        });
-        refreshCamerasBtn.addEventListener('click', populateCameraList);
-
-        // تحديث الكاميرا عند التغيير (مع إعادة التشغيل إذا كان يعمل)
-        cameraSelect.addEventListener('change', () => {
-            if (startBtn.style.display === 'none') { // يعني الكاميرا شغالة
-                stopScanning();
-                startScanning();
+        // ----- تغيير وضع المسح (كل الأنواع / PDF417) -----
+        function setMode(mode) {
+            currentMode = mode;
+            if (mode === 'all') {
+                modeAllBtn.classList.add('active');
+                modePdf417Btn.classList.remove('active');
+            } else {
+                modePdf417Btn.classList.add('active');
+                modeAllBtn.classList.remove('active');
             }
+            // إذا كانت الكاميرا تعمل، سنستمر بدون إعادة تشغيل (المسح المباشر يستخدم hints في الالتقاط فقط)
+        }
+
+        // ----- ربط الأحداث -----
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
+        snapBtn.addEventListener('click', captureAndDecode);
+        refreshBtn.addEventListener('click', populateCameras);
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) decodeUploadedImage(e.target.files[0]);
         });
+        modeAllBtn.addEventListener('click', () => setMode('all'));
+        modePdf417Btn.addEventListener('click', () => setMode('pdf417'));
 
-        // تحميل قائمة الكاميرات عند فتح الصفحة
-        window.addEventListener('load', populateCameraList);
-        // تنظيف
-        window.addEventListener('beforeunload', () => reader.reset());
-
-        // إفلات الصور
-        const dropZone = document.querySelector('.container');
-        dropZone.addEventListener('dragover', e => e.preventDefault());
-        dropZone.addEventListener('drop', e => {
+        // السحب والإفلات
+        document.body.addEventListener('dragover', e => e.preventDefault());
+        document.body.addEventListener('drop', e => {
             e.preventDefault();
             const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                decodeImage(file);
-            }
+            if (file && file.type.startsWith('image/')) decodeUploadedImage(file);
         });
-    </script>
+
+        // تهيئة أولية
+        populateCameras();
+        window.addEventListener('beforeunload', stopCamera);
+    })();
+</script>
 </body>
-</html>
+    </html>
