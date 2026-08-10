@@ -3,59 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>قارئ باركود PDF417 - مع التكبير</title>
+  <title>ماسح PDF417 المتقدم جداً</title>
   
   <script src="https://unpkg.com/@zxing/library@latest"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-    body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 15px; }
-    .container { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center; }
-    h2 { font-size: 1.3rem; margin-bottom: 10px; color: #333; }
-    p.note { font-size: 0.85rem; color: #d9534f; margin-bottom: 15px; font-weight: bold; }
+    body { background-color: #121212; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 15px; }
+    .container { background: #1e1e1e; padding: 20px; border-radius: 12px; width: 100%; max-width: 500px; text-align: center; }
+    h2 { font-size: 1.2rem; margin-bottom: 10px; color: #00e676; }
+    p { font-size: 0.85rem; color: #aaa; margin-bottom: 15px; }
     
     .video-wrapper { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 4 / 3; margin-bottom: 15px; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
+    /* إطار المسح الذي سيتم اقتطاعه فقط */
     .scan-guide {
-      position: absolute; top: 30%; left: 10%; width: 80%; height: 40%;
-      border: 2px dashed #00ff66; box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.4);
-      border-radius: 6px; pointer-events: none;
+      position: absolute; top: 30%; left: 5%; width: 90%; height: 40%;
+      border: 2px solid #00e676; box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.6);
+      border-radius: 4px; pointer-events: none;
     }
 
-    .zoom-control { margin-bottom: 15px; display: none; align-items: center; justify-content: center; gap: 10px; }
-    .zoom-control label { font-size: 0.9rem; }
+    button { padding: 12px 24px; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; margin: 5px; }
+    #startBtn { background-color: #00e676; color: #000; }
+    #stopBtn { background-color: #ff5252; color: #fff; }
 
-    .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
-    button { padding: 10px 20px; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; }
-    #startBtn { background-color: #007bff; color: white; }
-    #stopBtn { background-color: #dc3545; color: white; }
-
-    .result-box { background: #e9ecef; padding: 12px; border-radius: 6px; text-align: right; border-right: 4px solid #007bff; }
-    #result { word-break: break-all; font-family: monospace; font-size: 0.9rem; }
+    .result-box { background: #2a2a2a; padding: 12px; border-radius: 6px; text-align: right; border-right: 4px solid #00e676; margin-top: 15px; }
+    #result { word-break: break-all; font-family: monospace; font-size: 0.9rem; color: #fff; margin-top: 5px; }
+    
+    /* Canvas مخفي للمعالجة البرمجية */
+    canvas { display: none; }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h2>ماسح PDF417 للكاميرات عالية الدقة</h2>
-    <p class="note">⚠️ لا تقرّب الجوال كثيراً! ابتعد 20-30 سم واستخدم التكبير (Zoom) لضمان وضوح التركيز.</p>
+    <h2>ماسح PDF417 (معالج التباين الضوئي)</h2>
+    <p>ضع الباركود **كاملًا** داخل المربع الأخضر بشكل أفقي ومستقيم</p>
 
     <div class="video-wrapper">
-      <video id="video"></video>
+      <video id="video" autoplay playsinline></video>
       <div class="scan-guide"></div>
     </div>
 
-    <!-- التحكم بالتكبير الرقمي -->
-    <div class="zoom-control" id="zoomContainer">
-      <label for="zoomRange">التكبير (Zoom):</label>
-      <input type="range" id="zoomRange" min="1" max="5" step="0.1" value="1">
-    </div>
-
-    <div class="controls">
-      <button id="startBtn">تشغيل الكاميرا</button>
-      <button id="stopBtn">إيقاف</button>
-    </div>
+    <button id="startBtn">تشغيل الكاميرا</button>
+    <button id="stopBtn">إيقاف</button>
 
     <div class="result-box">
       <strong>النتيجة:</strong>
@@ -63,68 +55,85 @@
     </div>
   </div>
 
+  <canvas id="cropCanvas"></canvas>
+
   <script>
     const codeReader = new ZXing.BrowserPDF417Reader();
-    const videoElement = document.getElementById('video');
-    const resultElement = document.getElementById('result');
+    const video = document.getElementById('video');
+    const resultDiv = document.getElementById('result');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
-    const zoomContainer = document.getElementById('zoomContainer');
-    const zoomRange = document.getElementById('zoomRange');
+    const canvas = document.getElementById('cropCanvas');
+    const ctx = canvas.getContext('2d');
 
-    let videoTrack = null;
+    let stream = null;
+    let scanInterval = null;
 
     startBtn.addEventListener('click', async () => {
       try {
-        // إعدادات الكاميرا: اختيار الدقة العالية مع تقييد معدل الإطارات لتحسين معالجة كل إطار
-        const constraints = {
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { max: 15 } // خفض الفريمات يمنح المعالج وقتاً أطول لفك التشفير
-          }
-        };
-
-        resultElement.textContent = 'جاري التشغيل... ثبت الجوال على مسافة مناسبة';
-
-        await codeReader.decodeFromConstraints(constraints, 'video', (result, err) => {
-          if (result) {
-            resultElement.textContent = result.getText();
-            // تشغيل صوت التنبيه عند التقاط الباركود
-            navigator.vibrate?.(200);
-          }
+        // تشغيل الكاميرا بدقة قياسية عالية الأداء
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
         });
+        video.srcObject = stream;
+        resultDiv.textContent = 'جاري تحليل الإطارات... وجه الباركود بدقة';
 
-        // تفعيل ميزة الزوم (Zoom) إن كانت مدعومة في الجوال
-        const stream = videoElement.srcObject;
-        if (stream) {
-          videoTrack = stream.getVideoTracks()[0];
-          const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-
-          if (capabilities.zoom) {
-            zoomContainer.style.display = 'flex';
-            zoomRange.min = capabilities.zoom.min;
-            zoomRange.max = capabilities.zoom.max;
-            zoomRange.step = capabilities.zoom.step;
-            zoomRange.value = capabilities.zoom.min;
-
-            zoomRange.oninput = () => {
-              videoTrack.applyConstraints({ advanced: [{ zoom: parseFloat(zoomRange.value) }] });
-            };
-          }
-        }
+        // بدء الدورة البرمجية لاقتطاع الصور وتحسينها كل 200 مللي ثانية
+        scanInterval = setInterval(processAndScanFrame, 200);
 
       } catch (err) {
-        console.error(err);
-        alert('خطأ في فتح الكاميرا: ' + err.message);
+        alert('خطأ الكاميرا: ' + err.message);
       }
     });
 
+    function processAndScanFrame() {
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+      // أبعاد المربع الأخضر بالنسبة المئوية
+      const cropX = video.videoWidth * 0.05;
+      const cropY = video.videoHeight * 0.30;
+      const cropWidth = video.videoWidth * 0.90;
+      const cropHeight = video.videoHeight * 0.40;
+
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+
+      // رسم الجزء المقتطع فقط من الكاميرا
+      ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+      // زيادة التباين الضوئي (Increase Contrast) لجعل الأسود أسود والأبيض أبيض
+      const imgData = ctx.getImageData(0, 0, cropWidth, cropHeight);
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        let avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
+        let color = avg > 110 ? 255 : 0; // تحويل الصورة إلى B&W نقي
+        d[i] = d[i + 1] = d[i + 2] = color;
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      // محاولة فك التشفير من الصورة المعالجة
+      codeReader.decodeFromImageElement(createImageFromCanvas(canvas))
+        .then(result => {
+          if (result) {
+            resultDiv.textContent = result.getText();
+            if (navigator.vibrate) navigator.vibrate(200);
+          }
+        })
+        .catch(() => {
+          // لم يتم العثور في هذا الإطار، يستمر في المحاولة
+        });
+    }
+
+    function createImageFromCanvas(c) {
+      const img = new Image();
+      img.src = c.toDataURL('image/png');
+      return img;
+    }
+
     stopBtn.addEventListener('click', () => {
-      codeReader.reset();
-      zoomContainer.style.display = 'none';
-      resultElement.textContent = 'تم إيقاف الكاميرا.';
+      if (scanInterval) clearInterval(scanInterval);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      resultDiv.textContent = 'تم الإيقاف.';
     });
   </script>
 
