@@ -3,119 +3,53 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>قارئ باركود PDF417</title>
+  <title>قارئ باركود PDF417 - مع التكبير</title>
   
-  <!-- مكتبة ZXing عبر CDN -->
   <script src="https://unpkg.com/@zxing/library@latest"></script>
 
-  <!-- تنسيقات CSS -->
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 15px; }
+    .container { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center; }
+    h2 { font-size: 1.3rem; margin-bottom: 10px; color: #333; }
+    p.note { font-size: 0.85rem; color: #d9534f; margin-bottom: 15px; font-weight: bold; }
+    
+    .video-wrapper { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 4 / 3; margin-bottom: 15px; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    
+    .scan-guide {
+      position: absolute; top: 30%; left: 10%; width: 80%; height: 40%;
+      border: 2px dashed #00ff66; box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.4);
+      border-radius: 6px; pointer-events: none;
     }
 
-    body {
-      background-color: #f4f6f9;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
+    .zoom-control { margin-bottom: 15px; display: none; align-items: center; justify-content: center; gap: 10px; }
+    .zoom-control label { font-size: 0.9rem; }
 
-    .container {
-      background: #ffffff;
-      padding: 25px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 500px;
-      text-align: center;
-    }
+    .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; }
+    #startBtn { background-color: #007bff; color: white; }
+    #stopBtn { background-color: #dc3545; color: white; }
 
-    h2 {
-      color: #333;
-      margin-bottom: 20px;
-      font-size: 1.4rem;
-    }
-
-    .video-wrapper {
-      position: relative;
-      width: 100%;
-      background: #000;
-      border-radius: 8px;
-      overflow: hidden;
-      margin-bottom: 20px;
-      aspect-ratio: 4 / 3;
-    }
-
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .controls {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      margin-bottom: 20px;
-    }
-
-    button {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 6px;
-      font-size: 1rem;
-      font-weight: bold;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    #startBtn {
-      background-color: #007bff;
-      color: white;
-    }
-    #startBtn:hover { background-color: #0056b3; }
-
-    #stopBtn {
-      background-color: #dc3545;
-      color: white;
-    }
-    #stopBtn:hover { background-color: #a71d2a; }
-
-    .result-box {
-      background: #e9ecef;
-      padding: 15px;
-      border-radius: 6px;
-      text-align: right;
-      border-right: 4px solid #007bff;
-    }
-
-    .result-box strong {
-      display: block;
-      margin-bottom: 5px;
-      color: #495057;
-    }
-
-    #result {
-      color: #212529;
-      word-break: break-all;
-      font-family: monospace;
-      font-size: 0.95rem;
-    }
+    .result-box { background: #e9ecef; padding: 12px; border-radius: 6px; text-align: right; border-right: 4px solid #007bff; }
+    #result { word-break: break-all; font-family: monospace; font-size: 0.9rem; }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h2>ماسح باركود PDF417</h2>
+    <h2>ماسح PDF417 للكاميرات عالية الدقة</h2>
+    <p class="note">⚠️ لا تقرّب الجوال كثيراً! ابتعد 20-30 سم واستخدم التكبير (Zoom) لضمان وضوح التركيز.</p>
 
     <div class="video-wrapper">
       <video id="video"></video>
+      <div class="scan-guide"></div>
+    </div>
+
+    <!-- التحكم بالتكبير الرقمي -->
+    <div class="zoom-control" id="zoomContainer">
+      <label for="zoomRange">التكبير (Zoom):</label>
+      <input type="range" id="zoomRange" min="1" max="5" step="0.1" value="1">
     </div>
 
     <div class="controls">
@@ -124,55 +58,72 @@
     </div>
 
     <div class="result-box">
-      <strong>النتيجة المستخرجة:</strong>
-      <span id="result">في انتظار بدء المسح...</span>
+      <strong>النتيجة:</strong>
+      <div id="result">في انتظار بدء المسح...</div>
     </div>
   </div>
 
-  <!-- كود JavaScript -->
   <script>
     const codeReader = new ZXing.BrowserPDF417Reader();
     const videoElement = document.getElementById('video');
     const resultElement = document.getElementById('result');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
+    const zoomContainer = document.getElementById('zoomContainer');
+    const zoomRange = document.getElementById('zoomRange');
+
+    let videoTrack = null;
 
     startBtn.addEventListener('click', async () => {
       try {
-        const videoInputDevices = await codeReader.listVideoInputDevices();
+        // إعدادات الكاميرا: اختيار الدقة العالية مع تقييد معدل الإطارات لتحسين معالجة كل إطار
+        const constraints = {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { max: 15 } // خفض الفريمات يمنح المعالج وقتاً أطول لفك التشفير
+          }
+        };
 
-        if (videoInputDevices.length === 0) {
-          alert('لم يتم العثور على كاميرا في الجهاز.');
-          return;
-        }
+        resultElement.textContent = 'جاري التشغيل... ثبت الجوال على مسافة مناسبة';
 
-        // اختيار الكاميرا الخلفية إن وجدت
-        const backCamera = videoInputDevices.find(device => 
-          device.label.toLowerCase().includes('back') || 
-          device.label.toLowerCase().includes('environment')
-        );
-        const selectedDeviceId = backCamera ? backCamera.deviceId : videoInputDevices[0].deviceId;
-
-        resultElement.textContent = 'جاري الكشف... وجه الكاميرا نحو باركود PDF417';
-
-        // بدء القراءة المستمرة من الكاميرا
-        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+        await codeReader.decodeFromConstraints(constraints, 'video', (result, err) => {
           if (result) {
             resultElement.textContent = result.getText();
-          }
-          if (err && !(err instanceof ZXing.NotFoundException)) {
-            console.error(err);
+            // تشغيل صوت التنبيه عند التقاط الباركود
+            navigator.vibrate?.(200);
           }
         });
 
+        // تفعيل ميزة الزوم (Zoom) إن كانت مدعومة في الجوال
+        const stream = videoElement.srcObject;
+        if (stream) {
+          videoTrack = stream.getVideoTracks()[0];
+          const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+
+          if (capabilities.zoom) {
+            zoomContainer.style.display = 'flex';
+            zoomRange.min = capabilities.zoom.min;
+            zoomRange.max = capabilities.zoom.max;
+            zoomRange.step = capabilities.zoom.step;
+            zoomRange.value = capabilities.zoom.min;
+
+            zoomRange.oninput = () => {
+              videoTrack.applyConstraints({ advanced: [{ zoom: parseFloat(zoomRange.value) }] });
+            };
+          }
+        }
+
       } catch (err) {
         console.error(err);
-        alert('حدث خطأ أثناء فتح الكاميرا: ' + err.message);
+        alert('خطأ في فتح الكاميرا: ' + err.message);
       }
     });
 
     stopBtn.addEventListener('click', () => {
       codeReader.reset();
+      zoomContainer.style.display = 'none';
       resultElement.textContent = 'تم إيقاف الكاميرا.';
     });
   </script>
