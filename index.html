@@ -1,209 +1,78 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>قراءة نص من صورة بدون API</title>
-
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 16px;
-      max-width: 700px;
-      margin: auto;
-    }
-
-    button {
-      padding: 10px 16px;
-      margin-top: 10px;
-      cursor: pointer;
-    }
-
-    textarea {
-      width: 100%;
-      margin-top: 10px;
-      padding: 10px;
-      font-size: 16px;
-    }
-
-    .box {
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      padding: 12px;
-      margin-top: 12px;
-      background: #fafafa;
-    }
-
-    .progress {
-      margin-top: 10px;
-      color: #555;
-    }
-
-    ul {
-      padding-right: 20px;
-    }
-
-    li {
-      margin-bottom: 8px;
-      background: white;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid #eee;
-      white-space: pre-wrap;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>قارئ باركود PDF417</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f9; padding: 20px; }
+        #video-container { position: relative; width: 100%; max-width: 500px; margin: auto; border: 4px solid #333; border-radius: 8px; overflow: hidden; background: #000; }
+        video { width: 100%; height: auto; display: block; }
+        #scanner-laser { position: absolute; top: 50%; left: 5%; width: 90%; height: 2px; background: red; box-shadow: 0 0 8px red; animation: laserMove 2s infinite ease-in-out; }
+        @keyframes laserMove { 0%, 100% { top: 20%; } 50% { top: 80%; } }
+        button { padding: 12px 24px; font-size: 16px; background: #28a745; color: #fff; border: none; border-radius: 5px; cursor: pointer; margin-top: 15px; }
+        #result-box { margin-top: 20px; padding: 15px; background: #fff; border: 1px solid #ccc; border-radius: 5px; max-width: 500px; margin-left: auto; margin-right: auto; word-break: break-all; }
+    </style>
+    <!-- استدعاء مكتبة ZXing المفتوحة المصدر عبر الـ CDN -->
+    <script src="https://unpkg.com"></script>
 </head>
-
 <body>
 
-  <h2>قراءة نص من صورة بدون API</h2>
+    <h2>ماسح باركود الهويات (PDF417)</h2>
+    <p>قم بتوجيه كاميرا الهاتف أو الحاسوب نحو باركود PDF417</p>
 
-  <input
-    id="imageInput"
-    type="file"
-    accept="image/*"
-    capture="environment"
-  >
+    <div id="video-container">
+        <video id="video"></video>
+        <div id="scanner-laser"></div>
+    </div>
 
-  <br>
+    <button id="start-btn">تشغيل الكاميرا والمسح</button>
+    
+    <div id="result-box">
+        <strong>البيانات المستخرجة:</strong>
+        <p id="result">في انتظار بدء المسح...</p>
+    </div>
 
-  <button id="readButton">اقرأ الصورة</button>
-  <button id="saveButton" disabled>حفظ النتيجة</button>
+    <script>
+        const codeReader = new ZXing.BrowserAztecCodeReader(); // كائن القارئ العام
+        const videoElement = document.getElementById('video');
+        const startBtn = document.getElementById('start-btn');
+        const resultText = document.getElementById('result');
+        let isScanning = false;
 
-  <div id="progress" class="progress"></div>
+        // تحديد نوع الباركود المطلوب حصراً لزيادة سرعة ودقة التعرف
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
+        const pdf417Reader = new ZXing.BrowserMultiFormatReader(hints);
 
-  <textarea
-    id="resultText"
-    rows="6"
-    placeholder="النص المستخرج سيظهر هنا"
-  ></textarea>
+        startBtn.addEventListener('click', () => {
+            if (isScanning) {
+                // إيقاف المسح
+                pdf417Reader.reset();
+                resultText.innerText = "تم إيقاف المسح.";
+                startBtn.innerText = "تشغيل الكاميرا والمسح";
+                startBtn.style.background = "#28a745";
+                isScanning = false;
+            } else {
+                // بدء المسح وتفعيل الكاميرا الخلفية (environment) للهواتف
+                resultText.innerText = "جاري تشغيل الكاميرا والبحث عن كود PDF417...";
+                pdf417Reader.decodeFromVideoDevice(undefined, videoElement, (result, err) => {
+                    if (result) {
+                        // عند نجاح القراءة
+                        resultText.innerHTML = `<span style="color:green; font-weight:bold;">${result.text}</span>`;
+                        // تنبيه صوتي بسيط (اختياري)
+                        navigator.vibrate ? navigator.vibrate(200) : null;
+                    }
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error(err);
+                    }
+                });
 
-  <div class="box">
-    <h3>النتائج المحفوظة</h3>
-    <ul id="savedResults"></ul>
-  </div>
-
-  <!-- مكتبة Tesseract.js -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
-  <script>
-    const imageInput = document.getElementById('imageInput');
-    const readButton = document.getElementById('readButton');
-    const saveButton = document.getElementById('saveButton');
-    const progress = document.getElementById('progress');
-    const resultText = document.getElementById('resultText');
-    const savedResults = document.getElementById('savedResults');
-
-    let currentText = '';
-
-    // قراءة النتائج المحفوظة من localStorage
-    function getSavedResults() {
-      try {
-        return JSON.parse(localStorage.getItem('ocr_results') || '[]');
-      } catch {
-        return [];
-      }
-    }
-
-    // حفظ كل النتائج داخل localStorage
-    function setSavedResults(items) {
-      localStorage.setItem('ocr_results', JSON.stringify(items));
-    }
-
-    // عرض النتائج المحفوظة
-    function renderSavedResults() {
-      const items = getSavedResults();
-      savedResults.innerHTML = '';
-
-      if (items.length === 0) {
-        savedResults.innerHTML = '<li>لا توجد نتائج محفوظة بعد</li>';
-        return;
-      }
-
-      items.forEach(item => {
-        const li = document.createElement('li');
-
-        const date = new Date(item.date).toLocaleString('ar');
-
-        li.textContent = `
-[${date}]
-${item.text}
-        `.trim();
-
-        savedResults.appendChild(li);
-      });
-    }
-
-    renderSavedResults();
-
-    // قراءة الصورة
-    readButton.addEventListener('click', async () => {
-      const file = imageInput.files[0];
-
-      if (!file) {
-        alert('اختر صورة أولًا');
-        return;
-      }
-
-      currentText = '';
-      resultText.value = '';
-      saveButton.disabled = true;
-
-      progress.textContent = 'جاري تجهيز محرك القراءة...';
-
-      try {
-        // إنشاء worker لقراءة العربية والإنجليزية
-        const worker = await Tesseract.createWorker('ara+eng', 1, {
-          logger: info => {
-            if (info.status === 'recognizing text') {
-              const percent = Math.round(info.progress * 100);
-              progress.textContent = `جاري قراءة النص: ${percent}%`;
+                startBtn.innerText = "إيقاف الكاميرا";
+                startBtn.style.background = "#dc3545";
+                isScanning = true;
             }
-          }
         });
-
-        const { data } = await worker.recognize(file);
-
-        await worker.terminate();
-
-        currentText = data.text || '';
-
-        resultText.value = currentText;
-
-        if (currentText.trim()) {
-          progress.textContent = 'تمت القراءة بنجاح';
-          saveButton.disabled = false;
-        } else {
-          progress.textContent = 'لم يتم العثور على نص داخل الصورة';
-        }
-
-      } catch (error) {
-        console.error(error);
-        progress.textContent = 'حدث خطأ أثناء قراءة الصورة';
-      }
-    });
-
-    // حفظ النتيجة
-    saveButton.addEventListener('click', () => {
-      if (!currentText.trim()) {
-        alert('لا يوجد نص لحفظه');
-        return;
-      }
-
-      const items = getSavedResults();
-
-      items.unshift({
-        id: Date.now(),
-        date: new Date().toISOString(),
-        text: currentText.trim()
-      });
-
-      setSavedResults(items);
-      renderSavedResults();
-
-      alert('تم حفظ النتيجة');
-    });
-  </script>
-
+    </script>
 </body>
 </html>
