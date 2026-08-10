@@ -3,137 +3,176 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ماسح PDF417 المتقدم جداً</title>
+  <title>قارئ PDF417 الموثوق</title>
   
+  <!-- مكتبة ZXing -->
   <script src="https://unpkg.com/@zxing/library@latest"></script>
 
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-    body { background-color: #121212; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 15px; }
-    .container { background: #1e1e1e; padding: 20px; border-radius: 12px; width: 100%; max-width: 500px; text-align: center; }
-    h2 { font-size: 1.2rem; margin-bottom: 10px; color: #00e676; }
-    p { font-size: 0.85rem; color: #aaa; margin-bottom: 15px; }
-    
-    .video-wrapper { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 4 / 3; margin-bottom: 15px; }
-    video { width: 100%; height: 100%; object-fit: cover; }
-    
-    /* إطار المسح الذي سيتم اقتطاعه فقط */
-    .scan-guide {
-      position: absolute; top: 30%; left: 5%; width: 90%; height: 40%;
-      border: 2px solid #00e676; box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.6);
-      border-radius: 4px; pointer-events: none;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
     }
 
-    button { padding: 12px 24px; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; margin: 5px; }
-    #startBtn { background-color: #00e676; color: #000; }
-    #stopBtn { background-color: #ff5252; color: #fff; }
+    body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
 
-    .result-box { background: #2a2a2a; padding: 12px; border-radius: 6px; text-align: right; border-right: 4px solid #00e676; margin-top: 15px; }
-    #result { word-break: break-all; font-family: monospace; font-size: 0.9rem; color: #fff; margin-top: 5px; }
-    
-    /* Canvas مخفي للمعالجة البرمجية */
-    canvas { display: none; }
+    .card {
+      background: #1e293b;
+      padding: 30px 20px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      width: 100%;
+      max-width: 450px;
+      text-align: center;
+      border: 1px solid #334155;
+    }
+
+    h2 {
+      font-size: 1.3rem;
+      margin-bottom: 12px;
+      color: #38bdf8;
+    }
+
+    p {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-bottom: 25px;
+      line-height: 1.5;
+    }
+
+    /* إخفاء عنصر المكون الاصلي واستبداله بزر أنيق */
+    input[type="file"] {
+      display: none;
+    }
+
+    .btn-capture {
+      display: inline-block;
+      width: 100%;
+      background: #0284c7;
+      color: #ffffff;
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
+    }
+
+    .btn-capture:active {
+      transform: scale(0.98);
+      background: #0369a1;
+    }
+
+    .preview-container {
+      margin-top: 20px;
+      display: none;
+    }
+
+    .preview-container img {
+      max-width: 100%;
+      max-height: 200px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+    }
+
+    .result-box {
+      margin-top: 25px;
+      background: #0f172a;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: right;
+      border-right: 4px solid #38bdf8;
+      min-height: 60px;
+    }
+
+    .result-title {
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-bottom: 5px;
+    }
+
+    #resultText {
+      font-family: monospace;
+      font-size: 0.95rem;
+      color: #4ade80;
+      word-break: break-all;
+    }
+
+    .loading {
+      color: #fbbf24;
+    }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <h2>ماسح PDF417 (معالج التباين الضوئي)</h2>
-    <p>ضع الباركود **كاملًا** داخل المربع الأخضر بشكل أفقي ومستقيم</p>
+  <div class="card">
+    <h2>مسح باركود PDF417</h2>
+    <p>اضغط أدناه لالتقاط صورة للباركود باستخدام كاميرا الجوال مباشرة وبدقة عالية</p>
 
-    <div class="video-wrapper">
-      <video id="video" autoplay playsinline></video>
-      <div class="scan-guide"></div>
+    <!-- التقاط مباشر عبر كاميرا الجوال الأساسية -->
+    <label for="cameraInput" class="btn-capture">
+      📷 التقاط صورة الباركود
+    </label>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+
+    <div class="preview-container" id="previewContainer">
+      <img id="imagePreview" alt="معاينة الصورة">
     </div>
 
-    <button id="startBtn">تشغيل الكاميرا</button>
-    <button id="stopBtn">إيقاف</button>
-
     <div class="result-box">
-      <strong>النتيجة:</strong>
-      <div id="result">في انتظار بدء المسح...</div>
+      <div class="result-title">النتيجة المستخرجة:</div>
+      <div id="resultText">في انتظار التقط الصورة...</div>
     </div>
   </div>
 
-  <canvas id="cropCanvas"></canvas>
-
   <script>
     const codeReader = new ZXing.BrowserPDF417Reader();
-    const video = document.getElementById('video');
-    const resultDiv = document.getElementById('result');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const canvas = document.getElementById('cropCanvas');
-    const ctx = canvas.getContext('2d');
+    const cameraInput = document.getElementById('cameraInput');
+    const resultText = document.getElementById('resultText');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewContainer = document.getElementById('previewContainer');
 
-    let stream = null;
-    let scanInterval = null;
+    cameraInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
 
-    startBtn.addEventListener('click', async () => {
-      try {
-        // تشغيل الكاميرا بدقة قياسية عالية الأداء
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        video.srcObject = stream;
-        resultDiv.textContent = 'جاري تحليل الإطارات... وجه الباركود بدقة';
+      // إظهار حالة المعالجة ورسم معاينة الصورة
+      resultText.className = 'loading';
+      resultText.textContent = 'جاري تحليل الصورة وفك التشفير...';
+      
+      const imageUrl = URL.createObjectURL(file);
+      imagePreview.src = imageUrl;
+      previewContainer.style.display = 'block';
 
-        // بدء الدورة البرمجية لاقتطاع الصور وتحسينها كل 200 مللي ثانية
-        scanInterval = setInterval(processAndScanFrame, 200);
+      imagePreview.onload = async () => {
+        try {
+          // فك تشفير الباركود من عنصر الصورة مباشرة
+          const result = await codeReader.decodeFromImageElement(imagePreview);
+          
+          resultText.className = '';
+          resultText.textContent = result.getText();
+          
+          // إهتزاز خفيف لتأكيد النجاح
+          if (navigator.vibrate) navigator.vibrate(200);
 
-      } catch (err) {
-        alert('خطأ الكاميرا: ' + err.message);
-      }
-    });
-
-    function processAndScanFrame() {
-      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-
-      // أبعاد المربع الأخضر بالنسبة المئوية
-      const cropX = video.videoWidth * 0.05;
-      const cropY = video.videoHeight * 0.30;
-      const cropWidth = video.videoWidth * 0.90;
-      const cropHeight = video.videoHeight * 0.40;
-
-      canvas.width = cropWidth;
-      canvas.height = cropHeight;
-
-      // رسم الجزء المقتطع فقط من الكاميرا
-      ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-
-      // زيادة التباين الضوئي (Increase Contrast) لجعل الأسود أسود والأبيض أبيض
-      const imgData = ctx.getImageData(0, 0, cropWidth, cropHeight);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        let avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
-        let color = avg > 110 ? 255 : 0; // تحويل الصورة إلى B&W نقي
-        d[i] = d[i + 1] = d[i + 2] = color;
-      }
-      ctx.putImageData(imgData, 0, 0);
-
-      // محاولة فك التشفير من الصورة المعالجة
-      codeReader.decodeFromImageElement(createImageFromCanvas(canvas))
-        .then(result => {
-          if (result) {
-            resultDiv.textContent = result.getText();
-            if (navigator.vibrate) navigator.vibrate(200);
-          }
-        })
-        .catch(() => {
-          // لم يتم العثور في هذا الإطار، يستمر في المحاولة
-        });
-    }
-
-    function createImageFromCanvas(c) {
-      const img = new Image();
-      img.src = c.toDataURL('image/png');
-      return img;
-    }
-
-    stopBtn.addEventListener('click', () => {
-      if (scanInterval) clearInterval(scanInterval);
-      if (stream) stream.getTracks().forEach(t => t.stop());
-      resultDiv.textContent = 'تم الإيقاف.';
+        } catch (error) {
+          console.error(error);
+          resultText.className = '';
+          resultText.style.color = '#f87171';
+          resultText.textContent = 'تعذر التعرف على الباركود! يرجى إعادة الالتقاط بحيث يكون الباركود واضحاً وبدون إضاءة عاكسة عليه.';
+        }
+      };
     });
   </script>
 
