@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+     <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -12,14 +12,15 @@
         @keyframes laserMove { 0%, 100% { top: 20%; } 50% { top: 80%; } }
         button { padding: 12px 24px; font-size: 16px; background: #28a745; color: #fff; border: none; border-radius: 5px; cursor: pointer; margin-top: 15px; }
         #result-box { margin-top: 20px; padding: 15px; background: #fff; border: 1px solid #ccc; border-radius: 5px; max-width: 500px; margin-left: auto; margin-right: auto; word-break: break-all; }
+        #error-msg { color: red; font-weight: bold; margin-top: 10px; }
     </style>
-    <!-- استدعاء مكتبة ZXing المفتوحة المصدر عبر الـ CDN -->
+    <!-- استدعاء المكتبة الموثوقة -->
     <script src="https://unpkg.com"></script>
 </head>
 <body>
 
     <h2>ماسح باركود الهويات (PDF417)</h2>
-    <p>قم بتوجيه كاميرا الهاتف أو الحاسوب نحو باركود PDF417</p>
+    <p>تأكد من فتح الصفحة عبر رابط آمن (HTTPS) أو تشغيلها محلياً (Localhost)</p>
 
     <div id="video-container">
         <video id="video"></video>
@@ -27,6 +28,7 @@
     </div>
 
     <button id="start-btn">تشغيل الكاميرا والمسح</button>
+    <div id="error-msg"></div>
     
     <div id="result-box">
         <strong>البيانات المستخرجة:</strong>
@@ -34,45 +36,76 @@
     </div>
 
     <script>
-        const codeReader = new ZXing.BrowserAztecCodeReader(); // كائن القارئ العام
         const videoElement = document.getElementById('video');
         const startBtn = document.getElementById('start-btn');
         const resultText = document.getElementById('result');
+        const errorMsg = document.getElementById('error-msg');
         let isScanning = false;
 
-        // تحديد نوع الباركود المطلوب حصراً لزيادة سرعة ودقة التعرف
+        // تهيئة القارئ المخصص لـ PDF417 فقط لسرعة الأداء
         const hints = new Map();
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
         const pdf417Reader = new ZXing.BrowserMultiFormatReader(hints);
 
-        startBtn.addEventListener('click', () => {
+        startBtn.addEventListener('click', async () => {
             if (isScanning) {
-                // إيقاف المسح
+                // إيقاف الكاميرا
                 pdf417Reader.reset();
                 resultText.innerText = "تم إيقاف المسح.";
                 startBtn.innerText = "تشغيل الكاميرا والمسح";
                 startBtn.style.background = "#28a745";
                 isScanning = false;
+                errorMsg.innerText = "";
             } else {
-                // بدء المسح وتفعيل الكاميرا الخلفية (environment) للهواتف
-                resultText.innerText = "جاري تشغيل الكاميرا والبحث عن كود PDF417...";
-                pdf417Reader.decodeFromVideoDevice(undefined, videoElement, (result, err) => {
-                    if (result) {
-                        // عند نجاح القراءة
-                        resultText.innerHTML = `<span style="color:green; font-weight:bold;">${result.text}</span>`;
-                        // تنبيه صوتي بسيط (اختياري)
-                        navigator.vibrate ? navigator.vibrate(200) : null;
-                    }
-                    if (err && !(err instanceof ZXing.NotFoundException)) {
-                        console.error(err);
-                    }
-                });
+                resultText.innerText = "جاري طلب إذن الكاميرا...";
+                errorMsg.innerText = "";
 
-                startBtn.innerText = "إيقاف الكاميرا";
-                startBtn.style.background = "#dc3545";
-                isScanning = true;
+                // التحقق من البيئة الآمنة (HTTPS)
+                if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                    errorMsg.innerText = "خطأ أمان: المتصفح يمنع فتح الكاميرا لأن الموقع لا يستخدم بروتوكول HTTPS الآمن.";
+                    return;
+                }
+
+                try {
+                    // جلب قائمة الأجهزة المتاحة
+                    const videoDevices = await pdf417Reader.listVideoInputDevices();
+                    if (videoDevices.length === 0) {
+                        errorMsg.innerText = "لم يتم العثور على أي كاميرا متصلة بالجهاز.";
+                        return;
+                    }
+
+                    // البحث عن الكاميرا الخلفية تلقائياً (تسمى عادة environment أو تحتوي على back)
+                    let selectedDeviceId = videoDevices[0].deviceId;
+                    for (let device of videoDevices) {
+                        if (device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment')) {
+                            selectedDeviceId = device.deviceId;
+                            break;
+                        }
+                    }
+
+                    // بدء المسح من الكاميرا المحددة
+                    pdf417Reader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
+                        if (result) {
+                            resultText.innerHTML = `<span style="color:green; font-weight:bold;">${result.text}</span>`;
+                            if (navigator.vibrate) navigator.vibrate(200); // اهتزاز خفيف للهواتف عند النجاح
+                        }
+                        if (err && !(err instanceof ZXing.NotFoundException)) {
+                            console.error(err);
+                        }
+                    });
+
+                    startBtn.innerText = "إيقاف الكاميرا";
+                    startBtn.style.background = "#dc3545";
+                    isScanning = true;
+                    resultText.innerText = "توجيه الكاميرا إلى الباركود جاري الآن...";
+
+                } catch (error) {
+                    console.error("Camera Error:", error);
+                    errorMsg.innerText = `فشل تشغيل الكاميرا: إما أن الإذن رُفض أو الكاميرا مستخدمة في تطبيق آخر (مثل زووم أو تيمز).`;
+                }
             }
         });
     </script>
 </body>
 </html>
+   
